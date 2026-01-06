@@ -1,0 +1,76 @@
+augmentation:
+  horizontal_flip: true
+  random_erasing:
+    aspect_ratio: 0.3
+    enabled: false
+    max_area: 0.15
+    min_area: 0.02
+    probability: 0.2
+  rotation_degrees: 5
+  translation_height: 0.1
+  translation_width: 0.1
+  zoom_max: 1.05
+  zoom_min: 0.9
+callbacks:
+  early_stopping:
+    enabled: true
+    min_delta: 0.0005
+    monitor: val_loss
+    patience: 18
+  reduce_lr:
+    enabled: false
+dataset:
+  cv:
+    num_folds: 5
+    shuffle: true
+    stratified_subjects: true
+  random_seed: 42
+  split_by: subject
+  test_ratio: 0.3
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+metrics:
+  primary: macro_f1
+  secondary:
+  - accuracy
+  - loss
+model:
+  dense_units: 128
+  dual_pooling: true
+  img_size: 224
+  input_channels: 1
+  num_classes: 15
+multi_run:
+  aggregation:
+    compute_per_class_f1: true
+    compute_stats: true
+    metrics:
+    - test_accuracy
+    - test_macro_f1
+  base_seed: 42
+  enabled: true
+  num_runs: 30
+  save_all_confusion_matrices: true
+  save_all_runs: true
+  skip_cv: true
+results:
+  base_dir: /mnt/d/Graduation_Project/ai-virtual-coach/experiments/exer_recog/results/exp_05_small_cnn
+  log_cv_summary: true
+  log_per_fold: true
+  save_checkpoints: true
+  save_confusion_matrix: true
+  save_metrics: true
+  save_plots: true
+retrain:
+  use_internal_val_split: true
+  val_ratio: 0.15
+training:
+  batch_size: 32
+  initial_lr: 0.001
+  label_smoothing: 0.05
+  lr_schedule: cosine
+  max_epochs: 60
+  optimizer: adamw
+  strategy: small-cnn-kfold
+  weight_decay: 0.0001

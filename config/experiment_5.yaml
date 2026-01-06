@@ -1,0 +1,93 @@
+# Experiment 5: Small Task-Specific CNN with Subject-Wise K-Fold CV
+
+## Training Strategy
+training:
+  strategy: "small-cnn-kfold"
+  max_epochs: 60            # Max epochs per fold (early stopping will cut sooner)
+  batch_size: 32
+  initial_lr: 0.001         # AdamW starting LR
+  weight_decay: 0.0001
+  label_smoothing: 0.05
+  optimizer: "adamw"
+  lr_schedule: "cosine"     # Cosine decay or OneCycle implementation inside trainer
+
+## Callbacks
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 18
+    min_delta: 0.0005
+  reduce_lr:
+    enabled: false           # Cosine/OneCycle schedule replaces ReduceLROnPlateau
+
+## Data Augmentation (custom layer preferred)
+augmentation:
+  horizontal_flip: true
+  translation_height: 0.10
+  translation_width: 0.10
+  rotation_degrees: 5        # ± degrees
+  zoom_min: 0.90
+  zoom_max: 1.05
+  random_erasing:
+    enabled: false
+    probability: 0.2
+    min_area: 0.02
+    max_area: 0.15
+    aspect_ratio: 0.3
+
+## Model Configuration
+model:
+  img_size: 224
+  num_classes: 15
+  input_channels: 1          # Stay in grayscale to reduce params
+  dual_pooling: true
+  dense_units: 128
+
+## Dataset / Splits
+dataset:
+  split_by: "subject"
+  test_ratio: 0.30           # Frozen test set (never touched during CV)
+  random_seed: 42
+  cv:
+    num_folds: 5
+    stratified_subjects: true
+    shuffle: true
+
+## Retrain Settings (after CV hyperparams chosen)
+retrain:
+  use_internal_val_split: true
+  val_ratio: 0.15            # For early stopping during final training on 70% pool
+
+## Multi-Run Settings (30 independent runs with different random seeds)
+multi_run:
+  enabled: false             # Toggle to run 30-run variant instead of CV
+  num_runs: 30              # Number of independent training runs
+  base_seed: 42             # Starting seed (each run uses base_seed + run_idx)
+  skip_cv: true             # Don't run 5-fold CV for each run (too expensive)
+  save_all_runs: true       # Save individual metrics for all runs
+  save_all_confusion_matrices: true  # Save confusion matrix plots for all runs
+  aggregation:
+    compute_stats: true     # Calculate mean/std/min/max across runs
+    metrics: ["test_accuracy", "test_macro_f1"]  # Metrics to aggregate
+    compute_per_class_f1: true  # Also aggregate per-class F1 scores
+
+## Metrics / Logging
+metrics:
+  primary: "macro_f1"
+  secondary: ["accuracy", "loss"]
+
+## Memory Management
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+## Results
+results:
+  base_dir: "/mnt/d/Graduation_Project/ai-virtual-coach/experiments/exer_recog/results/exp_05_small_cnn"
+  save_checkpoints: true
+  save_plots: true
+  save_metrics: true
+  save_confusion_matrix: true
+  log_per_fold: true
+  log_cv_summary: true

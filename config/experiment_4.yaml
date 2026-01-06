@@ -1,0 +1,108 @@
+# Experiment 4: Regularized Dual-Pooling Heads with AdamW
+
+## Training Strategy
+training:
+  strategy: "2-phase-validation-monitored-regularized-dual-pooling"
+  frozen_epochs: 30
+  fine_tune_epochs: 20
+  batch_size: 32
+  initial_lr: 0.0001      # 1e-4 for classification head (AdamW)
+  fine_tune_lr: 0.00001   # 1e-5 for backbone fine-tuning (AdamW)
+  weight_decay: 0.0001    # 1e-4 weight decay for AdamW optimizer
+
+## Callbacks
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 10
+    min_delta: 0.001
+  
+  reduce_lr:
+    enabled: true
+    monitor: "val_loss"
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+
+## Data Augmentation (Basic - same as Experiments 1 & 3)
+augmentation:
+  horizontal_flip: true
+  translation_height: 0.15
+  translation_width: 0.15
+  rotation: false
+  zoom: false
+  brightness: false
+
+## Model Configuration
+model:
+  img_size: 224
+  num_classes: 15
+  use_validation: true
+  classification_head: "architecture-specific-v4-dual-pooling-regularized"
+  label_smoothing: 0.05    # Smooths target labels (0.9 for correct, 0.1/14 for others)
+
+## Dataset
+dataset:
+  # path: "datasets/GEIs_of_rgb_front/GEIs"  # Path to GEI images (Loaded manually in notebook)
+  val_ratio: 0.15  # 15% of subjects for validation (3-way split)
+  test_ratio: 0.3  # 30% of subjects for test
+  split_by: "subject"  # Prevent data leakage
+
+## Progressive Unfreezing Configuration for Phase 2
+# Strategy: Unfreeze top 50% of all backbones uniformly for Experiment 4
+# This is different from Experiment 3's architecture-specific percentages
+unfreezing:
+  strategy: "uniform-percentage"  # Uniform unfreezing for all backbones
+  
+  # All backbones use 50% unfreezing to maintain consistency
+  # and prevent catastrophic forgetting with stronger regularization
+  efficientnet_b0:
+    phase2_unfreeze_percent: 0.50
+  
+  efficientnet_b2:
+    phase2_unfreeze_percent: 0.50
+  
+  efficientnet_b3:
+    phase2_unfreeze_percent: 0.50
+  
+  resnet50:
+    phase2_unfreeze_percent: 0.50
+  
+  vgg16:
+    phase2_unfreeze_percent: 0.50
+  
+  mobilenet_v2:
+    phase2_unfreeze_percent: 0.50
+  
+  mobilenet_v3_large:
+    phase2_unfreeze_percent: 0.50
+
+## Reproducibility
+random_seed: 42
+
+## Memory Management
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+## Results
+results:
+  base_dir: "experiments/exer_recog/results/exp_04_regularized"
+  save_checkpoints: true
+  save_plots: true
+  save_metrics: true
+  save_confusion_matrix: true
+
+## Architecture-Specific Heads v4 Documentation
+# Key improvements over v3:
+# - Dual pooling: GlobalAveragePooling2D + GlobalMaxPooling2D concatenated
+# - Smaller classification heads to reduce overfitting
+# - Label smoothing (0.1) for better generalization
+# - AdamW optimizer with weight decay instead of L2 regularization
+# - Differential learning rates (head: 1e-4, backbone: 1e-5)
+# 
+# EfficientNet: Dual pooling → BN → Dense(256, swish) + Drop(0.3) → Dense(128, swish) + Drop(0.2)
+# ResNet50: Dual pooling → BN → Dense(256, relu) + Drop(0.4)
+# VGG16: Dual pooling → BN → Dense(256, relu) + Drop(0.4)
+# MobileNet: Dual pooling → Dense(128, relu) + Drop(0.25)

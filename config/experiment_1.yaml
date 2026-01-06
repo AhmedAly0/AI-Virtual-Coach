@@ -1,0 +1,62 @@
+# Experiment 1: 2-Phase Transfer Learning Configuration
+
+## Training Strategy
+training:
+  strategy: "2-phase-validation-monitored"
+  frozen_epochs: 10
+  fine_tune_epochs: 50
+  batch_size: 32
+  initial_lr: 0.001
+  fine_tune_lr: 0.0001
+  
+## Callbacks
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: "val_accuracy"
+    patience: 10
+    min_delta: 0.001
+  
+  reduce_lr:
+    enabled: true
+    monitor: "val_loss"
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+
+## Data Augmentation (Basic)
+augmentation:
+  horizontal_flip: true
+  translation_height: 0.15
+  translation_width: 0.15
+  rotation: false
+  zoom: false
+  brightness: false
+
+## Model Configuration
+model:
+  img_size: 224
+  num_classes: 15
+  use_validation: true
+  classification_head: "standard"  # Same for all backbones
+
+## Dataset
+dataset:
+  test_ratio: 0.3
+  split_by: "subject"  # Prevent data leakage
+
+## Reproducibility
+random_seed: 42
+
+## Memory Management
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+## Results
+results:
+  base_dir: "experiments/results/exp_01_baseline"
+  save_checkpoints: true
+  save_plots: true
+  save_metrics: true
+  save_confusion_matrix: true

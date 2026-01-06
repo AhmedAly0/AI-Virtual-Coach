@@ -1,0 +1,105 @@
+# Experiment 3: 2-Phase Transfer Learning with Architecture-Specific Heads v3
+
+## Training Strategy
+training:
+  strategy: "2-phase-validation-monitored-smart-heads"
+  frozen_epochs: 50
+  fine_tune_epochs: 100
+  batch_size: 32
+  initial_lr: 0.001
+  fine_tune_lr: 0.0001
+
+## Callbacks
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 10
+    min_delta: 0.001
+  
+  reduce_lr:
+    enabled: true
+    monitor: "val_loss"
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+
+## Data Augmentation (Basic - same as Experiment 1)
+augmentation:
+  horizontal_flip: true
+  translation_height: 0.15
+  translation_width: 0.15
+  rotation: false
+  zoom: false
+  brightness: false
+
+## Model Configuration
+model:
+  img_size: 224
+  num_classes: 15
+  use_validation: true
+  classification_head: "architecture-specific-v3"
+
+## Dataset
+dataset:
+  val_ratio: 0.15  # 15% of subjects for validation (3-way split)
+  test_ratio: 0.3  # 30% of subjects for test
+  split_by: "subject"  # Prevent data leakage
+
+## Progressive Unfreezing Configuration for Phase 2
+# Strategy: Unfreeze only top N% of backbone layers to preserve low-level ImageNet features
+# while adapting high-level features to GEI exercise recognition task
+unfreezing:
+  strategy: "percentage"  # percentage-based unfreezing
+  
+  # EfficientNet B0 (5.3M params) - Medium capacity
+  efficientnet_b0:
+    phase2_unfreeze_percent: 0.30  # Unfreeze top 30%
+  
+  # EfficientNet B2 (9.1M params) - Large capacity
+  efficientnet_b2:
+    phase2_unfreeze_percent: 0.25  # Unfreeze top 25%
+  
+  # EfficientNet B3 (12M params) - Very large capacity, OOM risk
+  efficientnet_b3:
+    phase2_unfreeze_percent: 0.25  # Conservative 25% to prevent OOM
+  
+  # ResNet50 (25.6M params) - Massive capacity, high OOM risk
+  resnet50:
+    phase2_unfreeze_percent: 0.20  # Very conservative 20% due to size
+  
+  # VGG16 (14.7M params) - Large capacity
+  vgg16:
+    phase2_unfreeze_percent: 0.25  # Conservative 25%
+  
+  # MobileNet V2 (3.5M params) - Small capacity
+  mobilenet_v2:
+    phase2_unfreeze_percent: 0.35  # Higher percentage for smaller model
+  
+  # MobileNet V3 Large (5.4M params) - Medium capacity
+  mobilenet_v3_large:
+    phase2_unfreeze_percent: 0.30  # Moderate 30%
+
+## Reproducibility
+random_seed: 42
+
+## Memory Management
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+## Results
+results:
+  base_dir: "experiments/exer_recog/results/exp_03_smart_heads"
+  save_checkpoints: true
+  save_plots: true
+  save_metrics: true
+  save_confusion_matrix: true
+
+## Architecture-Specific Heads v3 Documentation
+# All backbones use GlobalAveragePooling2D followed by 2 Dense layers
+# 
+# EfficientNet: Dense(512, swish) + BN + Dropout(0.3) → Dense(256, swish) + Dropout(0.2)
+# ResNet50: Dense(1024, relu) + Dropout(0.4) → Dense(512, relu) + Dropout(0.3)
+# VGG16: Dense(512, relu) + Dropout(0.5) → Dense(256, relu) + Dropout(0.4)
+# MobileNet: Dense(256, relu) + Dropout(0.25) → Dense(128, relu) + Dropout(0.15)

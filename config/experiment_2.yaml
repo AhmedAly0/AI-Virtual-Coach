@@ -1,0 +1,125 @@
+# Experiment 2: 3-Stage Progressive Unfreezing Configuration
+
+## Training Strategy
+training:
+  strategy: "3-stage-progressive-blind"
+  batch_size: 32
+  initial_lr: 0.001
+  fine_tune_lr: 0.0001
+  
+  # Progressive unfreezing percentages
+  progressive_unfreezing: true
+  unfreeze_stage_1_percent: 0.10  # Unfreeze bottom 10%
+  unfreeze_stage_2_percent: 0.30  # Unfreeze bottom 30%
+
+## Per-Backbone Epoch Configuration
+epochs:
+  efficientnet_b0:
+    frozen: 25
+    stage1: 15
+    stage2: 25
+    
+  efficientnet_b2:
+    frozen: 20
+    stage1: 12
+    stage2: 23
+    
+  efficientnet_b3:
+    frozen: 15
+    stage1: 10
+    stage2: 20
+    
+  resnet50:
+    frozen: 20
+    stage1: 10
+    stage2: 20
+    
+  vgg16:
+    frozen: 15
+    stage1: 8
+    stage2: 17
+    
+  mobilenet_v2:
+    frozen: 35
+    stage1: 20
+    stage2: 25
+    
+  mobilenet_v3_large:
+    frozen: 30
+    stage1: 15
+    stage2: 25
+
+## Callbacks (Train Loss Only - No Validation)
+callbacks:
+  reduce_lr:
+    enabled: true
+    monitor: "loss"  # Monitor train loss only
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+
+## Data Augmentation (Enhanced)
+augmentation:
+  horizontal_flip: true
+  translation_height: 0.15
+  translation_width: 0.15
+  
+  # Enhanced techniques (new in Experiment 2)
+  rotation: true
+  rotation_factor: 0.05  # ±18 degrees
+  
+  zoom: true
+  zoom_factor: 0.1  # ±10%
+  
+  brightness: true
+  brightness_factor: 0.1
+
+## Model Configuration
+model:
+  img_size: 224
+  num_classes: 15
+  use_validation: false  # Blind training - no validation monitoring
+  classification_head: "architecture-specific"
+
+## Classification Heads (Architecture-Specific)
+classification_heads:
+  efficientnet:
+    dense_units: 512
+    activation: "swish"
+    batch_norm: true
+    dropout: 0.4
+    
+  resnet:
+    architecture: "dual-branch-concatenation"
+    branch1_units: 256
+    branch2_units: 256
+    
+  vgg:
+    dense_units: 1024
+    dropout: 0.6
+    l2_regularization: 0.01
+    
+  mobilenet:
+    dense_units: 256
+    dropout: 0.3
+
+## Dataset
+dataset:
+  test_ratio: 0.3
+  split_by: "subject"  # Prevent data leakage
+
+## Reproducibility
+random_seed: 42
+
+## Memory Management
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+## Results
+results:
+  base_dir: "experiments/results/exp_02_progressive"
+  save_checkpoints: false  # No checkpoints in blind training
+  save_plots: true
+  save_metrics: true
+  save_confusion_matrix: true
