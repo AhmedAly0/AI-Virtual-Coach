@@ -1,97 +1,281 @@
 """
-Coaching Agent for AI Virtual Coach.
+Coaching Agent for AI Virtual Coach - LangGraph Implementation.
 
-This agent interprets aggregated assessment scores and generates
-reflective, post-exercise feedback for the user.
+This agent uses LangGraph to create a stateful workflow that:
+1. Loads exercise-specific criteria
+2. Analyzes assessment scores
+3. Generates personalized feedback using Gemini LLM
+4. Formats the final response
 
 Based on PRD Section 6.2.6:
 - Interpret aggregated scores using rule-based logic
 - Generate reflective, post-exercise feedback
-- Optional LLM usage for natural language generation
+- LLM usage for natural language generation
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
+from langgraph.graph import StateGraph, START, END
+from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
+
+from .state import CoachingState, AssessmentInput
+from .prompts import FEEDBACK_PROMPT
+from .exercise_criteria import get_exercise_criteria, format_criteria_for_prompt
+from .config import (
+    GEMINI_API_KEY, 
+    GEMINI_MODEL_NAME, 
+    MAX_FEEDBACK_WORDS,
+    SCORE_THRESHOLDS,
+)
 
 
-@dataclass
-class AssessmentScores:
-    """Container for the five aspect scores (0-10 scale)."""
-    # TODO: Define the 5 assessment aspects based on your model outputs
-    aspect_1: float
-    aspect_2: float
-    aspect_3: float
-    aspect_4: float
-    aspect_5: float
-    
-    def to_dict(self) -> dict:
-        return {
-            "aspect_1": self.aspect_1,
-            "aspect_2": self.aspect_2,
-            "aspect_3": self.aspect_3,
-            "aspect_4": self.aspect_4,
-            "aspect_5": self.aspect_5,
-        }
-    
-    @property
-    def overall_score(self) -> float:
-        """Calculate overall score as mean of all aspects."""
-        scores = [self.aspect_1, self.aspect_2, self.aspect_3, 
-                  self.aspect_4, self.aspect_5]
-        return sum(scores) / len(scores)
+# ============================================================================
+# Pydantic Models for Structured Output
+# ============================================================================
 
-
-@dataclass
-class FeedbackResponse:
+class FeedbackResponse(BaseModel):
     """Structured feedback response to send to mobile app."""
-    exercise_name: str
-    recognition_confidence: float
-    session_scores: AssessmentScores
-    feedback_summary: str
-    detailed_feedback: list[str]
-    warnings: list[str]
+    exercise_name: str = Field(description="Name of the exercise performed")
+    exercise_id: int = Field(description="ID of the exercise (1-15)")
+    recognition_confidence: float = Field(description="Confidence of exercise recognition")
+    scores: dict[str, float] = Field(description="Assessment scores per criterion")
+    overall_score: float = Field(description="Mean of all scores")
+    feedback_summary: str = Field(description="LLM-generated coaching feedback")
+    detailed_feedback: list[str] = Field(description="Per-criterion feedback with icons")
+    warnings: list[str] = Field(description="Any warnings about the assessment")
 
+
+# ============================================================================
+# Graph Nodes
+# ============================================================================
+
+def load_criteria_node(state: CoachingState) -> dict:
+    """
+    Node 1: Load exercise-specific criteria based on exercise ID.
+    """
+    try:
+        exercise_id = state["input"]["exercise_id"]
+        exercise_name = state["input"]["exercise_name"]
+        
+        # Try by ID first, then by name
+        try:
+            name, criteria = get_exercise_criteria(exercise_id=exercise_id)
+        except ValueError:
+            name, criteria = get_exercise_criteria(exercise_name=exercise_name)
+        
+        return {"exercise_criteria": criteria}
+    
+    except Exception as e:
+        return {
+            "exercise_criteria": [],
+            "error": f"Failed to load exercise criteria: {str(e)}"
+        }
+
+
+def analyze_scores_node(state: CoachingState) -> dict:
+    """
+    Node 2: Analyze scores and generate warnings.
+    """
+    scores = state["input"]["scores"]
+    recognition_confidence = state["input"]["recognition_confidence"]
+    
+    # Calculate overall score
+    score_values = list(scores.values())
+    overall = sum(score_values) / len(score_values) if score_values else 0
+    
+    # Generate warnings
+    warnings = []
+    
+    if recognition_confidence < 0.7:
+        warnings.append(
+            f"Low exercise recognition confidence ({recognition_confidence:.0%}). "
+            "Results may be less reliable."
+        )
+    
+    if overall < SCORE_THRESHOLDS["needs_improvement"]:
+        warnings.append(
+            "Overall form score is below average. "
+            "Consider reviewing proper technique before next session."
+        )
+    
+    # Check for critically low individual scores
+    for criterion, score in scores.items():
+        if score < 3.0:
+            warnings.append(
+                f"'{criterion}' scored very low ({score:.1f}/10). "
+                "This needs immediate attention."
+            )
+    
+    # Create score analysis summary
+    analysis = f"Overall: {overall:.1f}/10. "
+    excellent = [k for k, v in scores.items() if v >= SCORE_THRESHOLDS["excellent"]]
+    weak = [k for k, v in scores.items() if v < SCORE_THRESHOLDS["good"]]
+    
+    if excellent:
+        analysis += f"Strong: {', '.join(excellent)}. "
+    if weak:
+        analysis += f"Focus on: {', '.join(weak)}."
+    
+    return {
+        "score_analysis": analysis,
+        "warnings": warnings,
+    }
+
+
+def generate_detailed_feedback_node(state: CoachingState) -> dict:
+    """
+    Node 3: Generate detailed per-criterion feedback with icons.
+    """
+    scores = state["input"]["scores"]
+    criteria = state["exercise_criteria"]
+    
+    feedback = []
+    
+    # Pair scores with criteria (assuming same order)
+    score_items = list(scores.items())
+    
+    for i, (criterion_name, score) in enumerate(score_items):
+        # Use criterion from loaded list if available
+        display_name = criteria[i] if i < len(criteria) else criterion_name
+        # Just use the first part before the colon for display
+        if ":" in display_name:
+            display_name = display_name.split(":")[0]
+        
+        if score >= SCORE_THRESHOLDS["excellent"]:
+            feedback.append(f"✓ {display_name}: Excellent ({score:.1f}/10)")
+        elif score >= SCORE_THRESHOLDS["good"]:
+            feedback.append(f"○ {display_name}: Good ({score:.1f}/10)")
+        elif score >= SCORE_THRESHOLDS["needs_improvement"]:
+            feedback.append(f"△ {display_name}: Needs improvement ({score:.1f}/10)")
+        else:
+            feedback.append(f"✗ {display_name}: Needs attention ({score:.1f}/10)")
+    
+    return {"detailed_feedback": feedback}
+
+
+def generate_llm_feedback_node(state: CoachingState) -> dict:
+    """
+    Node 4: Generate LLM-based coaching feedback using Gemini.
+    """
+    if not GEMINI_API_KEY:
+        return {"llm_feedback": "LLM feedback unavailable: API key not configured."}
+    
+    try:
+        # Initialize the LLM
+        llm = ChatGoogleGenerativeAI(
+            model=GEMINI_MODEL_NAME,
+            google_api_key=GEMINI_API_KEY,
+            temperature=0.7,
+        )
+        
+        # Prepare prompt variables
+        scores = state["input"]["scores"]
+        exercise_name = state["input"]["exercise_name"]
+        criteria = state["exercise_criteria"]
+        
+        scores_formatted = "\n".join(
+            f"- {k}: {v}/10" for k, v in scores.items()
+        )
+        overall_score = sum(scores.values()) / len(scores)
+        criteria_formatted = format_criteria_for_prompt(criteria)
+        
+        # Generate feedback
+        chain = FEEDBACK_PROMPT | llm
+        response = chain.invoke({
+            "exercise_name": exercise_name,
+            "exercise_criteria": criteria_formatted,
+            "scores_formatted": scores_formatted,
+            "overall_score": overall_score,
+            "max_words": MAX_FEEDBACK_WORDS,
+        })
+        
+        return {"llm_feedback": response.content}
+    
+    except Exception as e:
+        return {"llm_feedback": f"Error generating feedback: {str(e)}"}
+
+
+def format_response_node(state: CoachingState) -> dict:
+    """
+    Node 5: Format the final response combining all components.
+    """
+    input_data = state["input"]
+    scores = input_data["scores"]
+    overall_score = sum(scores.values()) / len(scores)
+    
+    response = FeedbackResponse(
+        exercise_name=input_data["exercise_name"],
+        exercise_id=input_data["exercise_id"],
+        recognition_confidence=input_data["recognition_confidence"],
+        scores=scores,
+        overall_score=overall_score,
+        feedback_summary=state.get("llm_feedback", ""),
+        detailed_feedback=state.get("detailed_feedback", []),
+        warnings=state.get("warnings", []),
+    )
+    
+    return {"final_response": response.model_dump()}
+
+
+# ============================================================================
+# Build the Graph
+# ============================================================================
+
+def build_coaching_graph() -> StateGraph:
+    """Build and return the coaching agent graph."""
+    
+    # Create the graph with our state type
+    graph = StateGraph(CoachingState)
+    
+    # Add nodes
+    graph.add_node("load_criteria", load_criteria_node)
+    graph.add_node("analyze_scores", analyze_scores_node)
+    graph.add_node("generate_detailed", generate_detailed_feedback_node)
+    graph.add_node("generate_llm", generate_llm_feedback_node)
+    graph.add_node("format_response", format_response_node)
+    
+    # Define edges (workflow)
+    graph.add_edge(START, "load_criteria")
+    graph.add_edge("load_criteria", "analyze_scores")
+    graph.add_edge("analyze_scores", "generate_detailed")
+    graph.add_edge("generate_detailed", "generate_llm")
+    graph.add_edge("generate_llm", "format_response")
+    graph.add_edge("format_response", END)
+    
+    return graph.compile()
+
+
+# ============================================================================
+# Main Agent Class
+# ============================================================================
 
 class CoachingAgent:
     """
-    Coaching Agent that generates exercise feedback.
+    LangGraph-based Coaching Agent.
     
-    This agent takes assessment scores from the ML models and generates
-    human-readable feedback using rule-based logic and optional LLM.
+    This agent uses a state graph to process assessment scores and
+    generate personalized exercise feedback.
     
     Example usage:
         agent = CoachingAgent()
-        scores = AssessmentScores(8.5, 7.0, 9.0, 6.5, 8.0)
-        feedback = agent.generate_feedback(
+        response = agent.generate_feedback(
+            exercise_id=1,
             exercise_name="Dumbbell Shoulder Press",
-            scores=scores,
-            recognition_confidence=0.95
+            scores={"criterion_1": 8.5, "criterion_2": 7.0, ...},
+            recognition_confidence=0.95,
+            view_type="front"
         )
     """
     
-    def __init__(self, use_llm: bool = False, llm_config: Optional[dict] = None):
-        """
-        Initialize the Coaching Agent.
-        
-        Args:
-            use_llm: Whether to use LLM for natural language generation.
-            llm_config: Configuration for LLM (API keys, model name, etc.)
-        """
-        self.use_llm = use_llm
-        self.llm_config = llm_config or {}
-        
-        # Score thresholds for feedback generation
-        self.thresholds = {
-            "excellent": 8.5,
-            "good": 7.0,
-            "needs_improvement": 5.0,
-            "poor": 0.0,
-        }
+    def __init__(self):
+        """Initialize the coaching agent with compiled graph."""
+        self.graph = build_coaching_graph()
     
     def generate_feedback(
         self,
+        exercise_id: int,
         exercise_name: str,
-        scores: AssessmentScores,
+        scores: dict[str, float],
         recognition_confidence: float,
         view_type: str = "front",
     ) -> FeedbackResponse:
@@ -99,158 +283,84 @@ class CoachingAgent:
         Generate comprehensive feedback for an exercise session.
         
         Args:
-            exercise_name: Name of the exercise performed.
-            scores: Assessment scores for all five aspects.
-            recognition_confidence: Confidence of exercise recognition model.
-            view_type: Camera view used ("front" or "side").
+            exercise_id: Exercise ID (1-15)
+            exercise_name: Name of the exercise performed
+            scores: Dict of criterion -> score (0-10 scale)
+            recognition_confidence: Confidence of exercise recognition
+            view_type: Camera view used ("front" or "side")
             
         Returns:
-            FeedbackResponse with all feedback components.
+            FeedbackResponse with all feedback components
         """
-        warnings = self._generate_warnings(recognition_confidence, scores)
-        summary = self._generate_summary(exercise_name, scores)
-        detailed = self._generate_detailed_feedback(exercise_name, scores, view_type)
+        # Prepare input state
+        input_data: AssessmentInput = {
+            "scores": scores,
+            "exercise_name": exercise_name,
+            "exercise_id": exercise_id,
+            "view_type": view_type,
+            "recognition_confidence": recognition_confidence,
+        }
         
-        if self.use_llm:
-            summary = self._enhance_with_llm(summary, detailed)
+        initial_state: CoachingState = {
+            "input": input_data,
+            "exercise_criteria": [],
+            "score_analysis": "",
+            "llm_feedback": "",
+            "detailed_feedback": [],
+            "warnings": [],
+            "final_response": None,
+            "error": None,
+        }
         
-        return FeedbackResponse(
-            exercise_name=exercise_name,
-            recognition_confidence=recognition_confidence,
-            session_scores=scores,
-            feedback_summary=summary,
-            detailed_feedback=detailed,
-            warnings=warnings,
-        )
-    
-    def _generate_warnings(
-        self, 
-        recognition_confidence: float, 
-        scores: AssessmentScores
-    ) -> list[str]:
-        """Generate warnings for low confidence or problematic inputs."""
-        warnings = []
+        # Run the graph
+        result = self.graph.invoke(initial_state)
         
-        if recognition_confidence < 0.7:
-            warnings.append(
-                f"Low exercise recognition confidence ({recognition_confidence:.0%}). "
-                "Results may be less reliable."
-            )
-        
-        if scores.overall_score < self.thresholds["needs_improvement"]:
-            warnings.append(
-                "Overall form score is below average. "
-                "Consider reviewing proper technique before next session."
-            )
-        
-        return warnings
-    
-    def _generate_summary(
-        self, 
-        exercise_name: str, 
-        scores: AssessmentScores
-    ) -> str:
-        """Generate a brief overall summary of the exercise performance."""
-        overall = scores.overall_score
-        
-        if overall >= self.thresholds["excellent"]:
-            quality = "excellent"
-            message = "Great job! Your form was excellent throughout the session."
-        elif overall >= self.thresholds["good"]:
-            quality = "good"
-            message = "Good work! Your form was solid with minor areas for improvement."
-        elif overall >= self.thresholds["needs_improvement"]:
-            quality = "fair"
-            message = "Your form needs some attention. Focus on the feedback below."
-        else:
-            quality = "needs work"
-            message = "Your form requires significant improvement. Consider lighter weights."
-        
-        return (
-            f"Exercise: {exercise_name}\n"
-            f"Overall Score: {overall:.1f}/10 ({quality})\n\n"
-            f"{message}"
-        )
-    
-    def _generate_detailed_feedback(
-        self,
-        exercise_name: str,
-        scores: AssessmentScores,
-        view_type: str,
-    ) -> list[str]:
-        """Generate detailed feedback for each assessment aspect."""
-        feedback = []
-        
-        # TODO: Customize feedback based on actual aspect definitions
-        # This is a template - replace with your specific aspects
-        aspects = [
-            ("Aspect 1", scores.aspect_1),
-            ("Aspect 2", scores.aspect_2),
-            ("Aspect 3", scores.aspect_3),
-            ("Aspect 4", scores.aspect_4),
-            ("Aspect 5", scores.aspect_5),
-        ]
-        
-        for aspect_name, score in aspects:
-            if score >= self.thresholds["excellent"]:
-                feedback.append(f"✓ {aspect_name}: Excellent ({score:.1f}/10)")
-            elif score >= self.thresholds["good"]:
-                feedback.append(f"○ {aspect_name}: Good ({score:.1f}/10)")
-            elif score >= self.thresholds["needs_improvement"]:
-                feedback.append(f"△ {aspect_name}: Needs improvement ({score:.1f}/10)")
-            else:
-                feedback.append(f"✗ {aspect_name}: Needs attention ({score:.1f}/10)")
-        
-        return feedback
-    
-    def _enhance_with_llm(self, summary: str, detailed: list[str]) -> str:
-        """
-        Optionally enhance feedback using an LLM for more natural language.
-        
-        Args:
-            summary: Rule-based summary text.
-            detailed: List of detailed feedback points.
-            
-        Returns:
-            Enhanced summary text from LLM.
-        """
-        # TODO: Implement LLM integration
-        # Options: OpenAI API, local LLM, etc.
-        # For now, return original summary
-        return summary
+        # Return structured response
+        return FeedbackResponse(**result["final_response"])
 
 
-# Example usage and testing
+# ============================================================================
+# Example Usage
+# ============================================================================
+
 if __name__ == "__main__":
     # Create agent
-    agent = CoachingAgent(use_llm=False)
+    agent = CoachingAgent()
     
-    # Example scores
-    scores = AssessmentScores(
-        aspect_1=8.5,
-        aspect_2=7.2,
-        aspect_3=9.1,
-        aspect_4=6.8,
-        aspect_5=7.5,
-    )
+    # Example assessment scores (matching the 5 criteria for Dumbbell Shoulder Press)
+    example_scores = {
+        "Starting position": 8.5,
+        "Top position": 7.2,
+        "Elbow path": 6.0,
+        "Tempo": 9.1,
+        "Core stability": 7.8,
+    }
     
     # Generate feedback
-    feedback = agent.generate_feedback(
+    print("Generating feedback...")
+    response = agent.generate_feedback(
+        exercise_id=1,
         exercise_name="Dumbbell Shoulder Press",
-        scores=scores,
+        scores=example_scores,
         recognition_confidence=0.92,
         view_type="front",
     )
     
     # Print results
-    print("=" * 50)
-    print(feedback.feedback_summary)
-    print("=" * 50)
-    print("\nDetailed Feedback:")
-    for item in feedback.detailed_feedback:
+    print("\n" + "=" * 60)
+    print(f"Exercise: {response.exercise_name}")
+    print(f"Overall Score: {response.overall_score:.1f}/10")
+    print(f"Recognition Confidence: {response.recognition_confidence:.0%}")
+    print("=" * 60)
+    
+    print("\n📊 Detailed Feedback:")
+    for item in response.detailed_feedback:
         print(f"  {item}")
     
-    if feedback.warnings:
-        print("\nWarnings:")
-        for warning in feedback.warnings:
-            print(f"  ⚠ {warning}")
+    print("\n💬 Coach Feedback:")
+    print(response.feedback_summary)
+    
+    if response.warnings:
+        print("\n⚠️ Warnings:")
+        for warning in response.warnings:
+            print(f"  • {warning}")

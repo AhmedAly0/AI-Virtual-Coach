@@ -1,6 +1,11 @@
 # Dataset files - too large for git
 datasets/
 
+# Environment variables (API keys)
+.env
+.env.local
+.env.*.local
+
 # Python
 __pycache__/
 *.py[cod]
