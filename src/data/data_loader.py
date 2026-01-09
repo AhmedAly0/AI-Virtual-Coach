@@ -19,7 +19,7 @@ logger.setLevel(logging.INFO)
 # Only add handler if no root handlers exist (notebook provides central logging)
 if not logging.getLogger().handlers:
     _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    _handler.setFormatter(logging.Formatter('%(message)s'))
     logger.addHandler(_handler)
 logger.propagate = True  # Let messages propagate to root handler
 
@@ -476,6 +476,13 @@ def split_by_subjects_three_way(
         for exercise in exercise_to_subjects:
             rng.shuffle(exercise_to_subjects[exercise])
         
+        # FIX: Sort classes by rarity (fewer unique subjects first) to ensure rare
+        # classes get subjects assigned before they're "stolen" by larger classes
+        sorted_exercises = sorted(
+            exercise_to_subjects.items(),
+            key=lambda x: len(x[1])  # Process classes with fewer subjects first
+        )
+        
         # Global tracking to prevent subject duplication across splits
         train_subjects = set()
         val_subjects = set()
@@ -483,11 +490,13 @@ def split_by_subjects_three_way(
         assigned_subjects = set()
         
         # Priority: ensure all classes in ALL THREE SPLITS (train, val, and test)
-        for exercise, class_subjects in exercise_to_subjects.items():
+        # Process rare classes first to prevent subject stealing
+        for exercise, class_subjects in sorted_exercises:
             # Only consider unassigned subjects for this class
             available = [s for s in class_subjects if s not in assigned_subjects]
             
             if not available:
+                # All subjects for this class already assigned - will handle in post-hoc rebalancing
                 continue
             
             n_available = len(available)
@@ -571,17 +580,46 @@ def split_by_subjects_three_way(
                 f"Subject accounting mismatch: {len(total_assigned)} assigned vs {len(subjects)} total"
             )
         
-        # Verify coverage (all splits should have all classes)
+        # Check coverage and apply POST-HOC REBALANCING if needed
         missing_from_train = [ex for ex in exercise_to_subjects if not any(s in train_subjects for s in exercise_to_subjects[ex])]
         missing_from_test = [ex for ex in exercise_to_subjects if not any(s in test_subjects for s in exercise_to_subjects[ex])]
         missing_from_val = [ex for ex in exercise_to_subjects if not any(s in val_subjects for s in exercise_to_subjects[ex])]
         
-        if missing_from_train:
-            logger.error(f"Train split missing classes: {missing_from_train}")
-        if missing_from_test:
-            logger.error(f"Test split missing classes: {missing_from_test}")
+        # Post-hoc rebalancing: move subjects from train to test/val to ensure coverage
+        for exercise in missing_from_test:
+            # Find a subject from this class that's in train and move to test
+            for subj in exercise_to_subjects[exercise]:
+                if subj in train_subjects:
+                    train_subjects.remove(subj)
+                    test_subjects.add(subj)
+                    logger.info(f"Rebalanced: moved {subj} from train to test for class '{exercise}'")
+                    break
+        
+        for exercise in missing_from_train:
+            # Find a subject from this class that's in test and move to train
+            for subj in exercise_to_subjects[exercise]:
+                if subj in test_subjects:
+                    test_subjects.remove(subj)
+                    train_subjects.add(subj)
+                    logger.info(f"Rebalanced: moved {subj} from test to train for class '{exercise}'")
+                    break
+        
+        # Re-check coverage after rebalancing
+        missing_from_train = [ex for ex in exercise_to_subjects if not any(s in train_subjects for s in exercise_to_subjects[ex])]
+        missing_from_test = [ex for ex in exercise_to_subjects if not any(s in test_subjects for s in exercise_to_subjects[ex])]
+        missing_from_val = [ex for ex in exercise_to_subjects if not any(s in val_subjects for s in exercise_to_subjects[ex])]
+        
+        if missing_from_train or missing_from_test:
+            # Critical failure - train and test MUST have all classes
+            error_msg = "STRATIFICATION FAILED after rebalancing:\n"
+            if missing_from_train:
+                error_msg += f"  Train split missing classes: {missing_from_train}\n"
+            if missing_from_test:
+                error_msg += f"  Test split missing classes: {missing_from_test}\n"
+            error_msg += "Consider using a different seed or adjusting split ratios."
+            raise ValueError(error_msg)
         if missing_from_val:
-            logger.warning(f"Val split missing classes: {missing_from_val}")
+            logger.warning(f"Val split missing classes (acceptable): {missing_from_val}")
     else:
         # Simple random split (backward compatible)
         rng.shuffle(subjects)
@@ -603,6 +641,66 @@ def split_by_subjects_three_way(
     )
     
     return train_dataset, val_dataset, test_dataset
+
+
+def split_by_subjects_three_way_with_retry(
+    dataset: List[Tuple[str, np.ndarray, str]], 
+    val_ratio: float = 0.15,
+    test_ratio: float = 0.3,
+    seed: int = None,
+    stratified: bool = True,
+    max_retries: int = 10
+) -> Tuple[List[Tuple], List[Tuple], List[Tuple]]:
+    """Split dataset with automatic retry on different seeds if stratification fails.
+    
+    Wraps split_by_subjects_three_way with retry logic. If the initial seed fails
+    to produce a valid stratified split (all classes in train and test), it will
+    try incrementing seeds until max_retries is reached.
+    
+    Args:
+        dataset (List[Tuple]): List of (exercise_name, image, subject_id) tuples
+        val_ratio (float): Fraction of subjects for validation (default: 0.15)
+        test_ratio (float): Fraction of subjects for test (default: 0.3)
+        seed (int): Starting random seed (default: None)
+        stratified (bool): If True, ensures each exercise class has ≥1 subject in train/test
+        max_retries (int): Maximum number of different seeds to try (default: 10)
+        
+    Returns:
+        Tuple[List, List, List]: (train_dataset, val_dataset, test_dataset)
+        
+    Raises:
+        ValueError: If no valid split found after max_retries attempts
+    """
+    if not stratified:
+        # No retry needed for non-stratified splits
+        return split_by_subjects_three_way(
+            dataset, val_ratio, test_ratio, seed=seed, stratified=False
+        )
+    
+    base_seed = seed if seed is not None else 42
+    last_error = None
+    
+    for attempt in range(max_retries):
+        current_seed = base_seed + attempt
+        try:
+            train, val, test = split_by_subjects_three_way(
+                dataset, val_ratio, test_ratio, seed=current_seed, stratified=True
+            )
+            if attempt > 0:
+                logger.info(f"Stratification succeeded on attempt {attempt + 1} with seed {current_seed}")
+            return train, val, test
+        except ValueError as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                logger.warning(f"Stratification failed with seed {current_seed}, retrying with seed {current_seed + 1}...")
+            continue
+    
+    # All retries exhausted
+    raise ValueError(
+        f"Failed to create valid stratified split after {max_retries} attempts. "
+        f"Last error: {last_error}\n"
+        "This may indicate insufficient subjects per class in the dataset."
+    )
 
 
 def build_subject_folds(

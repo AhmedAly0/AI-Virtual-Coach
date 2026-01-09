@@ -30,7 +30,7 @@ logger.setLevel(logging.INFO)
 # Only add handler if no root handlers exist (notebook provides central logging)
 if not logging.getLogger().handlers:
     _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    _handler.setFormatter(logging.Formatter('%(message)s'))
     logger.addHandler(_handler)
 logger.propagate = True  # Let messages propagate to root handler
 

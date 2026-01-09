@@ -1,5 +1,6 @@
 # Experiment 6: Pose-based MLP baseline configuration (SIDE VIEW - TEMPORAL)
-# Temporal pose features (9 angles × 30 timesteps)
+# Temporal pose features (13 angles × 50 timesteps) - Experiment #1 Enhanced
+# NEW: Added ankle angles (for Calf Raises) and wrist angles (for arm curls)
 
 dataset:
   random_seed: 42
@@ -7,16 +8,17 @@ dataset:
   test_ratio: 0.30
   stratified: true
   # Select specific angles to use for training
-  # Options: ['all'] to use all 9 angles, or list specific angles:
+  # Options: ['all'] to use all 13 angles, or list specific angles:
   # Available angles: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
-  #                    'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean']
+  #                    'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
+  #                    'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist']
   # Each angle contributes temporal sequence features
-  selected_angles: ['all']  # Use all 9 angles
+  selected_angles: ['all']  # Use all 13 angles
 
 
 model:
-  hidden_sizes: [384, 192, 96]
-  dropout: 0.30
+  hidden_sizes: [512, 256, 128]  # Increased capacity for 13 angles (was [384, 192, 96])
+  dropout: 0.35  # Increased from 0.30 to prevent overfitting on larger features
   num_classes: 15
 
 training:
@@ -29,7 +31,7 @@ callbacks:
   early_stopping:
     enabled: true
     monitor: val_loss
-    patience: 50
+    patience: 60  # Increased - more features may need longer convergence
     restore_best_weights: true
     min_delta: 0.0
   reduce_lr_on_plateau:

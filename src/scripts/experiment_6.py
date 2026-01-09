@@ -202,7 +202,7 @@ def train_experiment_6_static(
     test_ratio = test_ratio if test_ratio is not None else config['dataset']['test_ratio']
     seed = seed if seed is not None else config['dataset']['random_seed']
     batch_size = batch_size if batch_size is not None else config['training']['batch_size']
-    hidden_sizes = hidden_sizes if hidden_sizes is not None else tuple(config['model']['hidden_sizes'])
+    hidden_sizes = hidden_sizes if hidden_sizes is not None else tuple(int(x) for x in config['model']['hidden_sizes'])
     dropout = dropout if dropout is not None else config['model']['dropout']
     lr = lr if lr is not None else config['training']['lr']
     stratified = stratified if stratified is not None else config['dataset']['stratified']
@@ -343,13 +343,6 @@ def train_experiment_6_static(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
-
-    logger.info(
-        "Experiment 6 (static) complete. Test acc=%.4f, macro F1=%.4f",
-        results['test_metrics']['accuracy'],
-        results['test_metrics']['macro_f1'],
-    )
-
     return results
 
 
@@ -695,7 +688,7 @@ def train_experiment_6_temporal(
     test_ratio = test_ratio if test_ratio is not None else config['dataset']['test_ratio']
     seed = seed if seed is not None else config['dataset']['random_seed']
     batch_size = batch_size if batch_size is not None else config['training']['batch_size']
-    hidden_sizes = hidden_sizes if hidden_sizes is not None else tuple(config['model']['hidden_sizes'])
+    hidden_sizes = hidden_sizes if hidden_sizes is not None else tuple(int(x) for x in config['model']['hidden_sizes'])
     dropout = dropout if dropout is not None else config['model']['dropout']
     lr = lr if lr is not None else config['training']['lr']
     stratified = stratified if stratified is not None else config['dataset']['stratified']
@@ -830,13 +823,6 @@ def train_experiment_6_temporal(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
-
-    logger.info(
-        "Experiment 6 (temporal) complete. Test acc=%.4f, macro F1=%.4f",
-        results['test_metrics']['accuracy'],
-        results['test_metrics']['macro_f1'],
-    )
-
     return results
 
 
@@ -927,10 +913,6 @@ def train_experiment_6_temporal_multi_run(
             gc.collect()
     
     # Compute aggregated statistics
-    logger.info("\n" + "=" * 80)
-    logger.info("Computing aggregated statistics across %d runs", num_runs)
-    logger.info("=" * 80)
-    
     aggregated_stats = _compute_aggregation_stats_exp6(all_run_results)
     
     # Save multi-run summary
@@ -945,7 +927,6 @@ def train_experiment_6_temporal_multi_run(
     logger.info("Test Macro F1: %.4f ± %.4f",
                 aggregated_stats['test_macro_f1']['mean'],
                 aggregated_stats['test_macro_f1']['std'])
-    logger.info("Results saved to: %s", multi_run_folder)
     logger.info("=" * 80)
     
     return all_run_results, aggregated_stats

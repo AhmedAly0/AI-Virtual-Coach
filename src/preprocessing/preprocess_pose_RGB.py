@@ -262,6 +262,16 @@ def extract_features_from_video(video_path: str) -> Optional[Tuple[np.ndarray, i
                 left_knee = calculate_angle(normalized_lm[23], normalized_lm[25], normalized_lm[27])
                 right_knee = calculate_angle(normalized_lm[24], normalized_lm[26], normalized_lm[28])
                 
+                # NEW: Ankle angles (for Calf Raises detection)
+                # Landmarks: knee → ankle → heel
+                left_ankle = calculate_angle(normalized_lm[25], normalized_lm[27], normalized_lm[29])
+                right_ankle = calculate_angle(normalized_lm[26], normalized_lm[28], normalized_lm[30])
+                
+                # NEW: Wrist angles (for arm curl exercises)
+                # Landmarks: elbow → wrist → pinky
+                left_wrist = calculate_angle(normalized_lm[13], normalized_lm[15], normalized_lm[17])
+                right_wrist = calculate_angle(normalized_lm[14], normalized_lm[16], normalized_lm[18])
+                
                 # Compute torso lean angle (angle between torso and vertical axis) in 3D
                 # Torso vector: from pelvis (hip midpoint) to mid-shoulder
                 # Use original landmarks to get actual positions
@@ -291,8 +301,10 @@ def extract_features_from_video(video_path: str) -> Optional[Tuple[np.ndarray, i
                 else:
                     torso_lean = 0.0
                 
+                # 13 angles total: 9 original + 4 new (ankle and wrist)
                 frame_features = [left_elbow, right_elbow, left_shoulder, right_shoulder,
-                                 left_hip, right_hip, left_knee, right_knee, torso_lean]
+                                 left_hip, right_hip, left_knee, right_knee, torso_lean,
+                                 left_ankle, right_ankle, left_wrist, right_wrist]
                 
                 frame_features_list.append(frame_features)
                 
@@ -351,7 +363,7 @@ def build_static_rep_features(rep_sequences: List[np.ndarray]) -> np.ndarray:
         np.ndarray: Shape (num_reps, A * 5) containing aggregated statistics
     """
     if not rep_sequences:
-        return np.array([]).reshape(0, 45)  # 9 angles * 5 stats = 45
+        return np.array([]).reshape(0, 65)  # 13 angles * 5 stats = 65
     
     num_reps = len(rep_sequences)
     num_angles = rep_sequences[0].shape[1]
@@ -387,7 +399,7 @@ def build_temporal_rep_features(rep_sequences: List[np.ndarray], T_fixed: int = 
         np.ndarray: Shape (num_reps, T_fixed, A) with resampled sequences
     """
     if not rep_sequences:
-        return np.array([]).reshape(0, T_fixed, 9)
+        return np.array([]).reshape(0, T_fixed, 13)
     
     num_reps = len(rep_sequences)
     num_angles = rep_sequences[0].shape[1]
@@ -557,7 +569,8 @@ def extract_pose_estimates(
     clips_path: str,
     view: str,
     T_fixed: int = 50,
-    output_path: Optional[str] = None
+    output_path: Optional[str] = None,
+    version_tag: str = "v1"
 ) -> Tuple[Dict[str, np.ndarray], Dict, List[Dict]]:
     """Extract pose estimates from all videos in clips directory with tempo preservation.
     
@@ -566,6 +579,7 @@ def extract_pose_estimates(
         view (str): 'front' or 'side'
         T_fixed (int): Fixed length for temporal sequences (default: 50)
         output_path (str, optional): Path to save NPZ file. If None, only returns data.
+        version_tag (str): Version identifier (e.g., 'v1', 'v2'). Default: 'v1'
         
     Returns:
         Tuple containing:
@@ -689,7 +703,8 @@ def extract_pose_estimates(
         'static_feature_dim': X_static.shape[1] if len(X_static) > 0 else 0,
         'temporal_shape': X_temporal.shape if len(X_temporal) > 0 else (0, 0, 0),
         'angle_names': ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
-                       'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean'],
+                       'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
+                       'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist'],
         'tempo_stats': {
             'duration_mean': float(np.mean(tempo_duration_sec)),
             'duration_median': float(np.median(tempo_duration_sec)),
@@ -719,10 +734,10 @@ def extract_pose_estimates(
     
     # Save to separate NPZ files if output path provided
     if output_path:
-        # Determine base path and create separate file paths
+        # Determine base path and create versioned file paths
         base_path = os.path.splitext(output_path)[0]  # Remove .npz extension
-        static_path = f"{base_path}_static.npz"
-        temporal_path = f"{base_path}_temporal.npz"
+        static_path = f"{base_path}_static_{version_tag}.npz"
+        temporal_path = f"{base_path}_temporal_{version_tag}.npz"
         
         # Save static features
         logger.info(f"Saving static features to {static_path}...")

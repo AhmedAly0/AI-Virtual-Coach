@@ -472,13 +472,7 @@ def train_experiment_7_temporal(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
-    
-    logger.info(
-        "Experiment 7 (LSTM temporal) complete. Test acc=%.4f, macro F1=%.4f",
-        results['test_metrics']['accuracy'],
-        results['test_metrics']['macro_f1'],
-    )
-    
+
     return results
 
 
@@ -677,13 +671,7 @@ def train_experiment_7_static(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
-    
-    logger.info(
-        "Experiment 7 (LSTM static) complete. Test acc=%.4f, macro F1=%.4f",
-        results['test_metrics']['accuracy'],
-        results['test_metrics']['macro_f1'],
-    )
-    
+
     return results
 
 

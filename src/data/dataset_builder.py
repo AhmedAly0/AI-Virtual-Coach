@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import tensorflow as tf
 
-from .data_loader import split_by_subject_two_way, split_by_subjects_three_way
+from .data_loader import split_by_subject_two_way, split_by_subjects_three_way, split_by_subjects_three_way_with_retry
 from .preprocessing import (
     prep_tensors_with_preprocess,
     to_int,
@@ -203,9 +203,13 @@ def make_pose_split_three_way(
     val_ratio: float = 0.15,
     test_ratio: float = 0.3,
     seed: int = None,
-    stratified: bool = True
+    stratified: bool = True,
+    max_retries: int = 10
 ) -> Tuple[List[Tuple], List[Tuple], List[Tuple], Dict[str, int]]:
     """Subject-wise 3-way split for pose data with stratification enabled by default.
+
+    Uses automatic retry with different seeds if stratification fails to ensure
+    all classes are represented in train and test splits.
 
     Args:
         dataset (List[Tuple]): (exercise_name, sequence, subject_id, view) tuples.
@@ -213,14 +217,15 @@ def make_pose_split_three_way(
         test_ratio (float): Fraction of subjects for test split.
         seed (int): Random seed for reproducibility.
         stratified (bool): Ensure every class appears in train/val/test when possible.
+        max_retries (int): Maximum seed attempts for stratification (default: 10).
 
     Returns:
         Tuple[List[Tuple], List[Tuple], List[Tuple], Dict[str, int]]: Train/val/test splits
         and label-to-int mapping.
     """
 
-    train_samples, val_samples, test_samples = split_by_subjects_three_way(
-        dataset, val_ratio, test_ratio, seed=seed, stratified=stratified
+    train_samples, val_samples, test_samples = split_by_subjects_three_way_with_retry(
+        dataset, val_ratio, test_ratio, seed=seed, stratified=stratified, max_retries=max_retries
     )
 
     all_labels = [item[0] for item in dataset]

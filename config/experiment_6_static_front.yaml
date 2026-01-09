@@ -15,13 +15,13 @@ dataset:
 
 
 model:
-  hidden_sizes: [128, 64]
-  dropout: 0.40
+  hidden_sizes: [256, 128]
+  dropout: 0.35
   num_classes: 15
 
 training:
-  batch_size: 24
-  lr: 0.00005
+  batch_size: 20
+  lr: 0.00008
   max_epochs: 150
   optimizer: adam
 

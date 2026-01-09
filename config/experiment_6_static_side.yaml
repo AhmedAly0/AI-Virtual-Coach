@@ -15,21 +15,21 @@ dataset:
   
 
 model:
-  hidden_sizes: [192, 96]
-  dropout: 0.32
+  hidden_sizes: [224, 112]
+  dropout: 0.30
   num_classes: 15
 
 training:
   batch_size: 16
   lr: 0.00007
-  max_epochs: 150
+  max_epochs: 175
   optimizer: adam
 
 callbacks:
   early_stopping:
     enabled: true
     monitor: val_loss
-    patience: 45
+    patience: 50
     restore_best_weights: true
     min_delta: 0.0
   reduce_lr_on_plateau:
