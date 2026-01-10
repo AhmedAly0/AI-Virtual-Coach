@@ -29,7 +29,7 @@ GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
 
 # Agent settings
 DEFAULT_USE_LLM = True
-MAX_FEEDBACK_WORDS = 100
+MAX_FEEDBACK_WORDS = 150  # Increased for per-rep context
 
 # Score thresholds for feedback categorization
 SCORE_THRESHOLDS = {

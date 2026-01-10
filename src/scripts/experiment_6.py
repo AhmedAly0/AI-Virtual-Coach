@@ -343,6 +343,13 @@ def train_experiment_6_static(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
+    
+    # Save model in .keras format
+    if config['results'].get('save_model', True):
+        model_path = os.path.join(results_folder, 'model.keras')
+        model.save(model_path)
+        logger.info("Model saved to: %s", model_path)
+    
     return results
 
 
@@ -823,6 +830,13 @@ def train_experiment_6_temporal(
         metrics_path = os.path.join(results_folder, 'metrics.json')
         with open(metrics_path, 'w') as f:
             json.dump(results, f, indent=2)
+    
+    # Save model in .keras format
+    if config['results'].get('save_model', True):
+        model_path = os.path.join(results_folder, 'model.keras')
+        model.save(model_path)
+        logger.info("Model saved to: %s", model_path)
+    
     return results
 
 

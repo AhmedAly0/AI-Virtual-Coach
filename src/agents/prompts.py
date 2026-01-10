@@ -2,10 +2,10 @@
 Prompt templates for the Coaching Agent.
 
 This module contains all prompt templates used by the LangGraph agent
-for generating exercise feedback.
+for generating exercise feedback with per-rep analysis context.
 """
 
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 
 # System prompt that defines the coach's persona
@@ -15,72 +15,121 @@ and actionable feedback to help users improve their exercise technique.
 
 Key principles:
 - Always be encouraging and supportive
-- Provide specific, actionable advice
-- Reference the exact assessment criteria when giving feedback
+- Provide specific, actionable advice based on the per-rep data
+- Reference specific reps when form issues occurred
+- Identify patterns like fatigue-induced form breakdown
 - Prioritize safety and proper form
-- Keep feedback concise and easy to understand"""
+- Keep feedback concise and conversational"""
 
 
-# Main feedback generation prompt
+# Main feedback generation prompt with per-rep context
 FEEDBACK_PROMPT = ChatPromptTemplate.from_messages([
     ("system", COACH_SYSTEM_PROMPT),
-    ("human", """The user performed: {exercise_name}
+    ("human", """The user performed: {exercise_name} ({rep_count} reps)
 
 Exercise-Specific Assessment Criteria:
 {exercise_criteria}
 
-Assessment Scores (out of 10):
-{scores_formatted}
+═══════════════════════════════════════════════════════════════
+PER-REP ASSESSMENT BREAKDOWN
+═══════════════════════════════════════════════════════════════
+{per_rep_breakdown}
 
+═══════════════════════════════════════════════════════════════
+AGGREGATED ANALYSIS (computed from all reps)
+═══════════════════════════════════════════════════════════════
 Overall Score: {overall_score:.1f}/10
+Consistency Score: {consistency_score:.1f}/10 (how steady form was across reps)
 
-Task:
-1. Analyze these scores in the context of the specific criteria listed above.
-2. Identify the 1-2 weakest areas that need the most attention.
-3. Provide 2-3 specific, actionable tips for the next set.
-4. Use an encouraging, professional coaching tone.
-5. Keep it concise (under {max_words} words).
+Per-Criterion Summary:
+{criterion_summary}
 
-Format your response as a brief coaching message, not a list.""")
+Trend Analysis:
+- Strongest: {strongest_criterion}
+- Weakest: {weakest_criterion}
+{fatigue_analysis}
+
+═══════════════════════════════════════════════════════════════
+YOUR TASK
+═══════════════════════════════════════════════════════════════
+Based on this detailed per-rep assessment data:
+
+1. Acknowledge what the user did well (reference specific strong criteria)
+2. Identify the key issue(s) - be specific about WHICH reps had problems
+3. If fatigue was detected, address it directly (e.g., "I noticed your form dropped on reps 10-12...")
+4. Provide 2-3 specific, actionable tips for the next set
+5. End with encouragement
+
+Keep your response under {max_words} words. Be conversational, not a bullet list.""")
 ])
 
 
-# Prompt for score analysis (internal processing)
-SCORE_ANALYSIS_PROMPT = PromptTemplate.from_template(
-"""Analyze these exercise assessment scores:
+# Helper function to format per-rep breakdown for prompt
+def format_per_rep_breakdown(rep_scores: list, criteria_names: list[str]) -> str:
+    """
+    Format per-rep scores into a readable table for the LLM.
+    
+    Args:
+        rep_scores: List of PerRepScore objects
+        criteria_names: List of criterion names (shortened for display)
+        
+    Returns:
+        Formatted string table of all rep scores
+    """
+    if not rep_scores:
+        return "No rep data available."
+    
+    lines = []
+    
+    # Header with shortened criteria names
+    short_names = []
+    for name in criteria_names:
+        # Take first word or abbreviate
+        if ":" in name:
+            short = name.split(":")[0][:12]
+        else:
+            short = name[:12]
+        short_names.append(short)
+    
+    header = "Rep  | " + " | ".join(f"{n:^8}" for n in short_names) + " | Avg"
+    lines.append(header)
+    lines.append("-" * len(header))
+    
+    # Each rep row
+    for rep in rep_scores:
+        scores = [rep.scores.get(c, 0) for c in criteria_names]
+        avg = sum(scores) / len(scores) if scores else 0
+        
+        row = f"{rep.rep_number:>3}  | "
+        row += " | ".join(f"{s:^8.1f}" for s in scores)
+        row += f" | {avg:.1f}"
+        lines.append(row)
+    
+    return "\n".join(lines)
 
-Exercise: {exercise_name}
-Criteria and Scores:
-{scores_formatted}
 
-For each score:
-- 8.5-10: Excellent
-- 7.0-8.4: Good
-- 5.0-6.9: Needs improvement
-- Below 5.0: Needs significant attention
+def format_criterion_summary(criterion_trends: list) -> str:
+    """
+    Format criterion trends for the prompt.
+    
+    Args:
+        criterion_trends: List of CriterionTrend objects
+        
+    Returns:
+        Formatted summary string
+    """
+    lines = []
+    for trend in criterion_trends:
+        trend_icon = {"improving": "↑", "declining": "↓", "stable": "→"}.get(trend.trend, "→")
+        weak_reps = f" (weakest on reps {trend.weakest_reps})" if trend.weakest_reps else ""
+        lines.append(
+            f"• {trend.criterion}: {trend.mean:.1f}/10 (σ={trend.std:.2f}) {trend_icon}{weak_reps}"
+        )
+    return "\n".join(lines)
 
-Provide a brief internal analysis identifying:
-1. Strongest areas
-2. Weakest areas requiring focus
-3. Overall assessment quality
 
-Keep analysis to 50 words max."""
-)
-
-
-# Warning generation prompt (for edge cases)
-WARNING_PROMPT = PromptTemplate.from_template(
-"""Based on the following assessment data, determine if any warnings should be shown:
-
-Recognition Confidence: {recognition_confidence}
-Overall Score: {overall_score}
-Individual Scores: {scores_formatted}
-
-Generate warnings only if:
-- Recognition confidence is below 70%
-- Overall score is below 5.0
-- Any individual score is below 3.0
-
-Return warnings as a Python list of strings, or empty list if none needed.
-Example: ["Low confidence warning", "Form needs attention"]"""
-)
+def format_fatigue_analysis(fatigue_detected: bool, fatigue_details: str | None) -> str:
+    """Format fatigue analysis section."""
+    if not fatigue_detected:
+        return "- Fatigue: Not detected - form remained consistent throughout"
+    return f"- ⚠️ FATIGUE DETECTED: {fatigue_details}"

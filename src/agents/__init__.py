@@ -6,7 +6,7 @@ and coaching logic for exercise assessment.
 """
 
 from .coaching_agent import CoachingAgent, FeedbackResponse
-from .state import CoachingState, AssessmentInput
+from .state import CoachingState, AssessmentInput, PerRepScore, RepTrendAnalysis
 from .exercise_criteria import get_exercise_criteria, get_all_exercises
 
 __all__ = [
@@ -14,6 +14,8 @@ __all__ = [
     "FeedbackResponse", 
     "CoachingState",
     "AssessmentInput",
+    "PerRepScore",
+    "RepTrendAnalysis",
     "get_exercise_criteria",
     "get_all_exercises",
 ]
