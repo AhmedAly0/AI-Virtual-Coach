@@ -11,6 +11,14 @@
 \usepackage{xcolor}
 \usepackage{url}
 \usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{
+    arrows.meta,
+    positioning,
+    fit,
+    backgrounds
+}
+
 
 \begin{document}
 
@@ -127,10 +135,120 @@ The resulting annotation scores represent an overall quality assessment of the e
 The dataset exhibits a gender imbalance, with a higher proportion of male participants, as well as a limited number of lower-body exercise samples. These limitations are primarily due to cultural and logistical constraints during data collection. Nevertheless, the dataset captures substantial inter-subject variability and realistic execution patterns, making it suitable for evaluating virtual coaching and exercise assessment systems.
 
 
+\subsection{System Overview}
+
+Figure~\ref{fig:pipeline} illustrates the end-to-end pipeline of our AI Virtual Coach. The system processes a single-view RGB video (either front or side) and produces structured textual feedback through four sequential stages.
+
+\textbf{Stage 1: Pose Estimation and Feature Extraction.}
+Given an input video, we extract 3D pose landmarks for each frame using MediaPipe Pose Landmarker. The raw landmarks are normalized for scale and translation invariance (Section~\ref{sec:pose_gen}), and nine biomechanical joint angles are computed per frame. The resulting temporal sequence is resampled to a fixed length of $T=50$ timesteps, yielding a feature tensor of shape $(50, 9)$ per repetition.
+
+\textbf{Stage 2: Exercise Recognition.}
+The temporal pose features are passed to an MLP classifier that identifies which of the 15 supported exercises is being performed. The predicted exercise class determines which exercise-specific assessment model to invoke, enabling specialized evaluation tailored to each movement's biomechanics.
+
+\textbf{Stage 3: Per-Repetition Assessment.}
+Based on the recognized exercise, the corresponding assessment model (one of 15 trained separately per exercise and view) evaluates each detected repetition. Rather than outputting a single aggregated score, the model produces \emph{per-repetition} scores for five exercise-specific aspects (e.g., joint alignment, range of motion, tempo, stability). This fine-grained output enables downstream analysis of form consistency and fatigue patterns across the set.
+
+\textbf{Stage 4: Coaching Agent.}
+The per-rep assessment scores, along with exercise-specific evaluation criteria, are passed to a stateful coaching agent implemented using LangGraph. The agent performs rule-based trend analysis to detect fatigue (by comparing early vs.\ late reps), computes a consistency score (inverse of score variance), and identifies the strongest and weakest aspects. These analytical results, together with the detailed per-rep breakdown, are then passed to a large language model (Google Gemini) that generates personalized, actionable coaching feedback in natural language. The final output includes aggregated scores, trend indicators, fatigue warnings, and a conversational feedback summary suitable for display in a mobile application.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    font=\sffamily\scriptsize,
+    node distance=4mm,
+    box/.style={
+        rectangle,
+        rounded corners=2pt,
+        draw=black!80,
+        fill=blue!5,
+        line width=0.5pt,
+        align=center,
+        minimum height=8mm,
+        minimum width=16mm
+    },
+    data/.style={
+        rectangle,
+        rounded corners=1pt,
+        draw=black!60,
+        fill=gray!10,
+        line width=0.5pt,
+        align=center,
+        minimum height=8mm,
+        minimum width=16mm
+    },
+    stage/.style={
+        font=\sffamily\tiny\bfseries,
+        text=black!70
+    },
+    annot/.style={
+        font=\sffamily\tiny,
+        text=black!60
+    },
+    arrow/.style={->, >=Stealth, line width=0.5pt, black!70},
+    dashedarrow/.style={->, >=Stealth, dashed, line width=0.5pt, black!70}
+]
+
+% ===== ROW 1: Stages 1-3 =====
+\node[data] (rgb) {RGB Video\\(Front/Side)};
+\node[box, right=of rgb] (mp) {MediaPipe\\Pose};
+\node[box, right=of mp] (norm) {3D Norm.\\+ Angles};
+\node[box, right=8mm of norm] (mlp) {MLP\\Classifier};
+\node[box, right=8mm of mlp] (rep) {Rep\\Segment.};
+\node[box, right=of rep] (cnn) {Temporal\\CNN};
+\node[data, right=of cnn] (score) {5 Scores\\$\times N$ reps};
+
+\draw[arrow] (rgb) -- node[annot, above]{frames} (mp);
+\draw[arrow] (mp) -- node[annot, above]{33 lm} (norm);
+\draw[arrow] (norm) -- node[annot, above]{(50,9)} (mlp);
+\draw[dashedarrow] (mlp) -- node[annot, above]{route} (rep);
+\draw[arrow] (rep) -- node[annot, above]{$N$} (cnn);
+\draw[arrow] (cnn) -- (score);
+
+% Stage labels (row 1)
+\node[stage, above=2mm of mp] {Stage 1: Pose Estimation};
+\node[stage, above=2mm of mlp] {Stage 2};
+\node[annot, below=1mm of mlp] {15 classes};
+
+% Stage 3 bounding box
+\begin{scope}[on background layer]
+\node[
+    draw=black!40,
+    rounded corners=3pt,
+    line width=0.4pt,
+    fill=orange!5,
+    fit=(rep)(cnn)(score),
+    inner sep=2.5mm,
+    label={[stage, above=0.5mm]north:Stage 3: Assessment ($\times$15)}
+] {};
+\end{scope}
+
+% ===== ROW 2: Stage 4 =====
+\node[box, below=12mm of rep] (agent) {LangGraph\\Agent};
+\node[data, left=of agent] (crit) {Exercise\\Criteria};
+\node[box, right=of agent, fill=green!8] (llm) {Gemini\\LLM};
+\node[data, right=of llm, minimum width=20mm] (out) {Coaching Output\\Scores $\cdot$ Advice};
+
+\draw[arrow] (score) -- ++(0,-6mm) -| (agent);
+\draw[arrow] (crit) -- (agent);
+\draw[arrow] (agent) -- node[annot, above]{context} (llm);
+\draw[arrow] (llm) -- node[annot, above]{NL} (out);
+
+\node[stage, below=1mm of agent] {Stage 4: Coaching Agent};
+
+\end{tikzpicture}
+\caption{End-to-end pipeline. Stage~1 extracts pose landmarks and joint angles. Stage~2 classifies the exercise (15 classes). Stage~3 segments repetitions and applies exercise-specific temporal CNN models for per-rep aspect scores. Stage~4 uses LangGraph with Gemini LLM for personalized feedback.}
+\label{fig:pipeline}
+\end{figure*}
+
+
+
+
+
 \subsection{Pose Data Generation}
+\label{sec:pose_gen}
 
 \subsubsection{Pose Landmark Extraction}
-For each video frame, 3D human pose landmarks were extracted using the MediaPipe Pose Landmarker (lite, float16) \cite{mediapipe}. The model produces 33 body landmarks per frame, each with $(x, y, z)$ coordinates, where $x$ and $y$ represent normalized image-plane coordinates and $z$ represents depth from the camera plane. Detection and tracking confidence thresholds were set to 0.3. Frames were converted from BGR to RGB color space for MediaPipe compatibility, and a fresh \texttt{PoseLandmarker} instance was created per video to ensure proper timestamp handling in VIDEO mode.
+For each video frame, 3D human pose landmarks were extracted using the MediaPipe Pose Landmarker Lite model \cite{mediapipe}. The model produces 33 body landmarks per frame, each with $(x, y, z)$ coordinates, where $x$ and $y$ represent normalized image-plane coordinates and $z$ represents depth from the camera plane. Detection and tracking confidence thresholds were set to 0.3. Frames were converted from BGR to RGB color space for MediaPipe compatibility, and a fresh \texttt{PoseLandmarker} instance was created per video to ensure proper timestamp handling in VIDEO mode.
 
 \subsubsection{3D Landmark Normalization}
 To achieve scale and translation invariance with respect to camera distance and subject body size, all landmarks were normalized in 3D space using a torso-length-based transformation. First, the pelvis center $\mathbf{p}$ was computed as the midpoint of the left hip (landmark 23) and right hip (landmark 24):
@@ -168,23 +286,10 @@ Since resampling to a fixed length inherently discards information about exercis
 
 All processed pose data, including temporal angle sequences and tempo metadata, were stored in compressed NumPy archive (NPZ) format with data type \texttt{float32} for use in exercise recognition and assessment tasks.
 
-
-\subsection{System Overview}
-\begin{figure}[t]
-\centering
-\fbox{\parbox{\linewidth}{\centering \vspace{8mm}
-\textbf{Pipeline diagram placeholder}\\
-Video $\rightarrow$ Pose $\rightarrow$ Rep Segmentation $\rightarrow$ CNN Assessment\\
-(+ Exercise Recognition)
-\vspace{8mm}}}
-\caption{End-to-end system overview. Replace with your pipeline figure.}
-\label{fig:pipeline}
-\end{figure}
-
  
 
 \subsection{Exercise Recognition}
-The exercise recognition module classifies 15 resistance training exercises from temporal pose sequences using a multilayer perceptron (MLP) baseline. This module processes the temporal features extracted as described in Section~III-B and performs subject-disjoint classification to ensure generalization to unseen individuals.
+The exercise recognition module classifies 15 resistance training exercises from temporal pose sequences using a multilayer perceptron (MLP). This module processes the temporal features extracted as described in Section~III-B and performs subject-disjoint classification to ensure generalization to unseen individuals.
 
 \subsubsection{Model Architecture}
 The temporal pose sequences of shape $(N, 50, 9)$ were flattened into 450-dimensional feature vectors, where each vector represents the concatenated time series of nine joint angles over 50 timesteps. A feedforward neural network with three hidden layers was employed, with layer sizes of 384, 192, and 96 neurons respectively. Each hidden layer was followed by ReLU activation and dropout regularization with a dropout rate of 0.30 to prevent overfitting. The output layer consisted of 15 neurons with softmax activation for multi-class classification.
@@ -193,25 +298,42 @@ The temporal pose sequences of shape $(N, 50, 9)$ were flattened into 450-dimens
 The model was trained using the Adam optimizer with a learning rate of $8 \times 10^{-5}$ and a batch size of 16. Training was conducted for a maximum of 200 epochs with early stopping monitoring validation loss, using a patience of 50 epochs and restoring the best weights upon convergence. Learning rate reduction on plateau was enabled with a factor of 0.5 and a patience of 15 epochs. The loss function was sparse categorical cross-entropy, and both accuracy and macro-averaged F1 score were monitored during training.
 
 \subsection{Assessment Module}
-\subsubsection{Pose Extraction}
-Pose landmarks were extracted and processed as described in Section~III-B (Pose Data Generation), yielding temporal feature sequences of shape $(N_{\text{reps}}, 50, 9)$ representing nine joint angles over 50 time steps, along with tempo metadata for each repetition.
+Our assessment framework converts raw exercise videos into \emph{subject-level} performance scores through four stages: pose-based feature construction, repetition segmentation, repetition-to-subject aggregation, and multi-aspect regression. The full pose preprocessing and temporal feature representation are described in Section~III-B.
 
-\subsubsection{Repetition Segmentation}
-We detect repetitions using exercise/view-specific biomechanical signals (e.g., arm elevation for raises; hip/knee depth for squats) and a robust threshold-based up–down–up (or down–up–down) cycle logic with hysteresis and minimum-duration constraints.
-%% TODO: add a short table mapping exercise → segmentation signal (optional, if space).
+\subsubsection{Pose Extraction and Kinematic Feature Construction}
+Each frame is processed with MediaPipe to obtain 3D pose landmarks (33 keypoints). As described in Section~III-B, landmarks are normalized in 3D for scale and translation invariance, and a compact set of nine biomechanical joint-angle features is computed per frame. For each detected repetition, the resulting angle time series is resampled to a fixed length of $T=50$ time steps, producing a tensor of shape $(N_{\text{reps}}, 50, 9)$.
+Because temporal resampling removes absolute speed information, we preserve repetition tempo as additional metadata (e.g., original frame count and duration in seconds), enabling the model to distinguish fast and slow executions.
 
-\subsubsection{Rep Aggregation}
-Since labels are per-volunteer overall performance (not per-rep), we aggregate multiple reps from the same volunteer into a single subject-level sample using masked pooling/attention over rep embeddings.
+\subsubsection{Repetition Segmentation via Exercise/View-Specific Signals}
+We segment repetitions directly from the pose stream using a 1D exercise/view-specific ``rep signal'' designed to capture the primary biomechanical cycle of the movement (e.g., wrist/arm elevation for raises and pressing, elbow flexion for curls, hip/knee depth for squats and split squats). The rep signal is temporally smoothed, and repetitions are detected using a robust threshold-based cycle logic (up--down--up or down--up--down) with:
+(i) adaptive thresholds (computed from within-video statistics) to handle subject variability,
+(ii) hysteresis to prevent rapid state flipping near thresholds, and
+(iii) minimum-duration and minimum-separation constraints to avoid double counting due to noise.
+This yields a variable number of repetitions $N_{\text{reps}}$ per video.
 
-\subsubsection{Temporal CNN Regressor}
-We use a compact temporal CNN to encode per-rep sequences.
-The model predicts five aspect scores; training uses normalized labels in $[0,1]$ with MSE loss, and outputs are rescaled to 0--10 at inference.
+\subsubsection{Repetition Windowing and Subject-Level Aggregation}
+Each detected repetition is represented as a fixed-length temporal window (already resampled to $T=50$) of the nine angle features. A temporal encoder maps each repetition $r$ to an embedding $e_r \in \mathbb{R}^d$.
+Since ground-truth annotations are provided at the \emph{set/video} level (not per repetition), we aggregate the repetition embeddings into a single subject-level representation using masked attention pooling to handle variable $N_{\text{reps}}$:
+\begin{equation}
+\alpha_r = \frac{m_r \exp(a(e_r))}{\sum_k m_k \exp(a(e_k))}, \qquad
+e_{\text{subj}} = \sum_r \alpha_r e_r,
+\end{equation}
+where $a(\cdot)$ is a lightweight scoring network and $m_r \in \{0,1\}$ is a binary mask indicating valid repetitions.
+
+\subsubsection{Temporal CNN Regressor and Training Objective}
+We use a compact temporal CNN (1D convolutions over the time axis) to encode each repetition window and produce $e_r$. A shallow prediction head outputs five aspect scores per sample. During training, target labels are normalized to $[0,1]$ and optimized with mean squared error (MSE). At inference, outputs are rescaled to the original 0--10 range.
+
+When two coaches provide scores for a given set, we use a reliability-weighted fusion:
+\begin{equation}
+y = 0.25\,y_{C1} + 0.75\,y_{C2}.
+\end{equation}
+We train and evaluate the assessment model separately per exercise and per view (front/side) under subject-disjoint splits, and report MAE on the 0--10 scale.
 
 
 \section{Experimental Setup}
 
 \subsection{Data Splitting Protocol}
-To ensure robust performance evaluation and prevent subject leakage, we employed a subject-disjoint stratified splitting strategy where each volunteer appeared in exactly one of the train (55\%), validation (15\%), or test (30\%) sets. Stratification guarantees that all 15 exercise classes are represented in each split, which is critical given that some exercises have as few as 6 contributing volunteers.
+To ensure robust performance evaluation and prevent subject leakage, we employed a \textbf{subject-disjoint} stratified splitting strategy where each volunteer appeared in exactly one of the train (55\%), validation (15\%), or test (30\%) sets. Stratification guarantees that all 15 exercise classes are represented in each split, which is critical especially in the held-out test set to ensure true generalization for our proposed models.
 
 \subsection{Multi-Run Evaluation}
 To account for variance due to random initialization and data splitting, we conducted multiple independent training runs with different random seeds. For exercise recognition, we conducted 30 independent training runs (base seed 42 with incremental offsets). For exercise assessment, we repeat training for 10 randomized runs and select the best checkpoint (lowest MAE) per exercise/view.
@@ -224,29 +346,39 @@ For exercise recognition, both accuracy and macro-averaged F1 score were monitor
 \section{Results and Discussion}
 
 \subsection{Exercise Recognition Results}
-Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 30 runs on the side-view temporal data. The model achieved a mean test accuracy of $89.26\% \pm 2.64\%$ and a mean macro-averaged F1 score of $87.74\% \pm 2.88\%$. Individual run performance ranged from 83.78\% to 94.90\% in accuracy and from 81.16\% to 93.24\% in macro F1, demonstrating stable performance despite the relatively small dataset.
+Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 30 runs for both front and side views on the temporal pose data. The side-view model achieved a mean test accuracy of $89.26\% \pm 2.64\%$ and a mean macro-averaged F1 score of $87.74\% \pm 2.88\%$, while the front-view model achieved $76.16\% \pm 4.57\%$ accuracy and $75.08\% \pm 5.07\%$ macro F1. The side view consistently outperformed the front view by approximately 13 percentage points, suggesting that lateral body profiles provide more discriminative pose features for distinguishing between exercises.
 
 \begin{table}[t]
 \centering
-\caption{Exercise Recognition Results (Side View, 30 Runs)}
+\caption{Exercise Recognition Results (30 Runs per View)}
 \label{tab:exer_recog_results}
-\begin{tabular}{lcc}
+\begin{tabular}{llcc}
 \toprule
-\textbf{Metric} & \textbf{Mean $\pm$ Std} & \textbf{Range} \\
+\textbf{View} & \textbf{Metric} & \textbf{Mean $\pm$ Std} & \textbf{Range} \\
 \midrule
-Test Accuracy (\%) & $89.26 \pm 2.64$ & $[83.78, 94.90]$ \\
-Test Macro F1 (\%) & $87.74 \pm 2.88$ & $[81.16, 93.24]$ \\
+\multirow{2}{*}{Side} & Accuracy (\%) & $89.26 \pm 2.64$ & $[83.78, 94.90]$ \\
+ & Macro F1 (\%) & $87.74 \pm 2.88$ & $[81.16, 93.24]$ \\
+\midrule
+\multirow{2}{*}{Front} & Accuracy (\%) & $76.16 \pm 4.57$ & $[68.34, 86.38]$ \\
+ & Macro F1 (\%) & $75.08 \pm 5.07$ & $[65.70, 86.34]$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Per-class F1 scores revealed strong performance across most exercises, with several classes achieving F1 scores above 0.95 (Deadlift: 0.962, Rows: 0.960, Seated Biceps Curls: 0.977, Triceps Kickbacks: 0.957, Weighted Squats: 0.955). Classes with lower performance included Overhead Triceps Extension (0.654) and Shrugs (0.590), likely due to subtle biomechanical differences that are difficult to capture from the side view alone. Figure~\ref{fig:exer_recog_confusion} presents the aggregated normalized confusion matrix averaged across all 30 runs, showing strong diagonal dominance with minimal inter-class confusion.
+Per-class F1 scores for the side view revealed strong performance across most exercises, with several classes achieving F1 scores above 0.95 (Deadlift: 0.962, Rows: 0.960, Seated Biceps Curls: 0.977, Triceps Kickbacks: 0.957, Weighted Squats: 0.955). Classes with lower performance included Overhead Triceps Extension (0.654) and Shrugs (0.590), likely due to subtle biomechanical differences that are difficult to capture from the side view alone. Figures~\ref{fig:confusion_side} and~\ref{fig:confusion_front} present the aggregated normalized confusion matrices for side and front views respectively, averaged across all 30 runs. Both views show strong diagonal dominance, though the front view exhibits more inter-class confusion, particularly among curl variants and raises.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.48\textwidth]{confusion_matrix_side_temporal.png}
-\caption{Aggregated confusion matrix for exercise recognition (side view, mean across 30 runs, normalized). Strong diagonal indicates robust per-class performance with minimal confusion between exercise classes.}
-\label{fig:exer_recog_confusion}
+\caption{Aggregated confusion matrix for exercise recognition (side view, mean across 30 runs, normalized). Strong diagonal indicates robust per-class performance.}
+\label{fig:confusion_side}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{confusion_matrix_front_temporal.png}
+\caption{Aggregated confusion matrix for exercise recognition (front view, mean across 30 runs, normalized). More inter-class confusion is visible compared to the side view.}
+\label{fig:confusion_front}
 \end{figure}
 
 \subsection{Assessment Results (Front vs Side)}
