@@ -17,8 +17,8 @@ dataset:
 
 
 model:
-  hidden_sizes: [512, 256, 128]  # Increased capacity for 13 angles (was [384, 192, 96])
-  dropout: 0.35  # Increased from 0.32 to prevent overfitting on larger features
+  hidden_sizes: [384, 192, 96]  # Increased capacity for 13 angles (was [384, 192, 96])
+  dropout: 0.3  # Increased from 0.32 to prevent overfitting on larger features
   num_classes: 15
 
 training:
@@ -56,7 +56,7 @@ multi_run:
       - test_macro_f1
 
 results:
-  base_dir: /mnt/d/Graduation_Project/ai-virtual-coach/experiments/exer_recog/results/exp_06_pose_mlp_temporal/front
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_pose_mlp_temporal/front
   save_metrics: true
   save_confusion_matrix: true
   save_history: true

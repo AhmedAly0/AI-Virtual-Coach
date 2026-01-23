@@ -658,9 +658,6 @@ def extract_pose_estimates(
     logger.info(f"\n✓ Successfully extracted {len(all_rep_sequences)} reps from {total_videos_processed} videos")
     
     # Build static and temporal features
-    logger.info("Building static features...")
-    X_static = build_static_rep_features(all_rep_sequences)
-    
     logger.info(f"Building temporal features (T_fixed={T_fixed})...")
     X_temporal = build_temporal_rep_features(all_rep_sequences, T_fixed=T_fixed)
     
@@ -683,7 +680,6 @@ def extract_pose_estimates(
             subject_id_ints.append(0)  # Unknown
     
     dataset = {
-        'X_static': X_static,
         'X_temporal': X_temporal,
         'exercise_names': np.array(all_exercise_names, dtype=object),
         'subject_ids': np.array(subject_id_ints, dtype=np.int32),
@@ -700,7 +696,6 @@ def extract_pose_estimates(
         'unique_subjects': len(set(all_subject_ids)),
         'unique_exercises': len(set(all_exercise_names)),
         'failed_videos': len(failed_videos),
-        'static_feature_dim': X_static.shape[1] if len(X_static) > 0 else 0,
         'temporal_shape': X_temporal.shape if len(X_temporal) > 0 else (0, 0, 0),
         'angle_names': ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
                        'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
@@ -724,7 +719,6 @@ def extract_pose_estimates(
         f"  - Unique subjects: {statistics['unique_subjects']}\n"
         f"  - Unique exercises: {statistics['unique_exercises']}\n"
         f"  - Failed videos: {statistics['failed_videos']}\n"
-        f"  - Static features: {X_static.shape}\n"
         f"  - Temporal features: {X_temporal.shape}\n"
         f"  - Tempo duration (mean): {statistics['tempo_stats']['duration_mean']:.2f}s\n"
         f"  - Tempo frame count (median): {statistics['tempo_stats']['frame_count_median']:.0f}\n"
@@ -732,27 +726,11 @@ def extract_pose_estimates(
         f"{'='*60}"
     )
     
-    # Save to separate NPZ files if output path provided
+    # Save to NPZ file if output path provided
     if output_path:
         # Determine base path and create versioned file paths
         base_path = os.path.splitext(output_path)[0]  # Remove .npz extension
-        static_path = f"{base_path}_static_{version_tag}.npz"
         temporal_path = f"{base_path}_temporal_{version_tag}.npz"
-        
-        # Save static features
-        logger.info(f"Saving static features to {static_path}...")
-        np.savez(
-            static_path,
-            X_static=X_static,
-            exercise_names=dataset['exercise_names'],
-            subject_ids=dataset['subject_ids'],
-            tempo_duration_sec=tempo_duration_sec,
-            tempo_frame_count=tempo_frame_counts,
-            tempo_fps=tempo_fps,
-            view=view,
-            angle_names=statistics['angle_names'],
-        )
-        logger.info(f"✓ Static features saved ({X_static.shape}) with tempo metadata")
         
         # Save temporal features
         logger.info(f"Saving temporal features to {temporal_path}...")
@@ -771,7 +749,6 @@ def extract_pose_estimates(
         logger.info(f"✓ Temporal features saved ({X_temporal.shape}) with tempo metadata")
         
         # Update statistics with file paths
-        statistics['static_file'] = static_path
         statistics['temporal_file'] = temporal_path
     
     return dataset, statistics, failed_videos

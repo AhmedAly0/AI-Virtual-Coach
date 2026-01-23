@@ -13,12 +13,12 @@ dataset:
   #                    'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
   #                    'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist']
   # Each angle contributes temporal sequence features
-  selected_angles: ['all']  # Use all 13 angles
+  selected_angles: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean']  # Use all 13 angles
 
 
 model:
-  hidden_sizes: [512, 256, 128]  # Increased capacity for 13 angles (was [384, 192, 96])
-  dropout: 0.35  # Increased from 0.30 to prevent overfitting on larger features
+  hidden_sizes: [384, 192, 96]  # Increased capacity for 13 angles (was [384, 192, 96])
+  dropout: 0.30  # Increased from 0.30 to prevent overfitting on larger features
   num_classes: 15
 
 training:
@@ -56,7 +56,7 @@ multi_run:
       - test_macro_f1
 
 results:
-  base_dir: /mnt/d/Graduation_Project/ai-virtual-coach/experiments/exer_recog/results/exp_06_pose_mlp_temporal/side
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_pose_mlp_temporal/side
   save_metrics: true
   save_confusion_matrix: true
   save_history: true
