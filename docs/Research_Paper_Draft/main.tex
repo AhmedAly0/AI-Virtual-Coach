@@ -1,6 +1,6 @@
 % Auto-filled draft using your uploaded summaries (front/side).
 % Compile: pdflatex main.tex ; bibtex main ; pdflatex main.tex ; pdflatex main.tex
-\documentclass[conference]{IEEEtran}
+\documentclass[10pt,conference]{IEEEtran}
 \IEEEoverridecommandlockouts
 
 \usepackage{cite}
@@ -12,6 +12,10 @@
 \usepackage{url}
 \usepackage{array}
 \usepackage{tikz}
+\usepackage{float}
+\usepackage[section]{placeins}
+\graphicspath{{images/}}
+
 \usetikzlibrary{
     arrows.meta,
     positioning,
@@ -25,8 +29,29 @@
 \title{AI Virtual Coach with Multi-Stage Pipelines for Exercise Recognition and Pose-Based Assessment\thanks{This work involved human subjects in its research. The author(s) confirm(s) that all human subject research procedures and protocols are exempt from review board approval. Participation was voluntary, verbal informed agreement was obtained from all volunteers, and all collected data were anonymized using numerical identifiers to preserve participant privacy.}}
 
 \author{
-\IEEEauthorblockN{Anonymous Author(s)}
-\IEEEauthorblockA{Paper under double-blind review}
+\IEEEauthorblockN{1\textsuperscript{st} Ahmed Aly}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{Egypt-Japan University of Science and Technology}\\
+Alexandria, Egypt \\
+ahmed.mohammad@ejust.edu.eg}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Al Amir Eldomiatty}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{Egypt-Japan University of Science and Technology}\\
+Alexandria, Egypt \\
+alamir.eldomiatty@ejust.edu.eg}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Zeyad Elsayed}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{Egypt-Japan University of Science and Technology}\\
+Alexandria, Egypt \\
+zeyad.elsayed@ejust.edu.eg}
+\and
+\IEEEauthorblockN{4\textsuperscript{th} Walid Gomaa}
+\IEEEauthorblockA{\textit{Dept. of Computer Science and Engineering} \\
+\textit{Egypt-Japan University of Science and Technology}\\
+Alexandria, Egypt \\
+walid.gomaa@ejust.edu.eg}
 }
 
 \maketitle
@@ -40,32 +65,53 @@ We use a reliability-weighted label, a subject-disjoint protocol, and 10 randomi
 \end{abstract}
 
 \begin{IEEEkeywords}
-Virtual coach, pose estimation, exercise recognition, action quality assessment, exercise assessment, temporal CNN, rep segmentation, MediaPipe
+Virtual coach, pose estimation, exercise recognition, action quality assessment, exercise assessment, Neural Network Applications, temporal CNN, rep segmentation, MediaPipe
 \end{IEEEkeywords}
 
 \section{Introduction}
-%% TODO (you): 1–2 paragraphs:
-%% - Why virtual coaching matters, constraints of consumer RGB/mobile
-%% - Your 3-module pipeline and what each part enables
-%% - Mention small dataset challenge and how you handle it
+Resistance training is widely practiced for improving strength, hypertrophy, and overall health, yet incorrect technique can reduce training effectiveness and increase injury risk. In-person coaching helps correct form, but it is expensive, time-constrained, and not always available. This motivates \emph{AI virtual coaching} systems that can provide scalable, low-cost feedback using commodity devices such as smartphones.
+
+Recent progress in computer vision has enabled reliable \emph{exercise recognition} from video, answering the question of \emph{what} movement is being performed. However, virtual coaching also requires answering \emph{how well} an exercise is executed. This falls under \emph{action quality assessment} (AQA), where models estimate execution quality rather than only classifying the action. Most AQA research has focused on competitive sports or large-scale benchmarks, and commonly predicts a single overall score from a full clip. In contrast, gym training has distinct properties: videos often contain \emph{multiple repetitions} per set; execution quality may vary across repetitions; and coaches typically evaluate form across multiple \emph{aspects} (e.g., alignment, range of motion, stability, and control) rather than a single scalar rating. These differences make direct adoption of standard AQA pipelines suboptimal for practical fitness assessment.
+
+A further challenge is that deployable systems must operate in uncontrolled settings: consumer RGB video with varying camera placement, lighting, and occlusions. In small, real-world datasets, reliable evaluation is also difficult because performance can vary substantially across random initializations and subject splits. Finally, in many fitness datasets (including ours), supervision is available at the \emph{set/video level} (one label per volunteer per exercise set), not per repetition, which requires models to reconcile repetition-level inputs with subject-level targets.
+
+In this work, we study whether a lightweight, pose-based, multi-stage pipeline can provide practical assessment from consumer video under limited data. We propose an AI Virtual Coach composed of (i) an \emph{exercise recognition} model to identify the performed exercise, and (ii) an \emph{exercise assessment} model that predicts five aspect-level scores (0--10). The assessment module extracts temporal pose features, explicitly segments repetitions using exercise/view-specific biomechanical signals, encodes repetitions with a compact temporal CNN, and aggregates multiple repetitions into a subject-level representation aligned with set-level labels. We evaluate on a dataset of 51 volunteers performing 15 resistance-training exercises, recorded simultaneously from front and side viewpoints, and annotated by two certified coaches.
+
+Our central research question is: \emph{Can explicit repetition modeling (segmentation and aggregation) combined with compact pose-based temporal modeling enable consistent, aspect-level exercise assessment from consumer RGB video, and how do front and side viewpoints compare under a subject-disjoint evaluation protocol?} Answering this question contributes evidence toward deployable virtual coaching in realistic gym settings, and provides a reproducible evaluation protocol for small fitness-assessment datasets.
 
 \textbf{Contributions.} We contribute:
 \begin{itemize}
   \item A practical modular virtual-coach pipeline (exercise recognition, assessment, coaching agent).
-  \item A pose-based assessment method that segments repetitions, aggregates multiple reps per volunteer, and predicts five aspect scores on a 0–10 scale.
+  \item A pose-based assessment method that segments repetitions, aggregates multiple reps per volunteer, and predicts five aspect scores on a 0--10 scale.
   \item A subject-disjoint multi-run evaluation protocol for small datasets, saving the best model per exercise and view.
 \end{itemize}
 
+\textbf{Data and Code Availability.} The code for this work is publicly available at \url{https://github.com/AhmedAly0/AI-Virtual-Coach}.
+
+
 \section{Related Work}
+
 \subsection{Action Quality Assessment}
-FLEX introduces a large-scale multimodal, multiview dataset and benchmarks for action quality assessment.
-CoRe proposes group-aware contrastive regression for learning AQA from comparisons.
+Action Quality Assessment (AQA) aims to predict how well an action is executed rather than merely recognizing the action category. Many AQA approaches learn a direct mapping from a single video to a scalar quality score, which is challenging when quality differences are subtle and label variance across performers is large.
+
+Yu \emph{et al.} propose \emph{CoRe} (Group-aware Contrastive Regression), which reframes AQA as predicting \emph{relative} score differences with respect to exemplar videos rather than regressing absolute scores from a single video \cite{core}. By leveraging pairwise comparisons and a group-aware regression tree, CoRe reduces the difficulty caused by large inter-video score variations and improves ranking-based evaluation on established AQA benchmarks \cite{core}. Similarly, Roy \emph{et al.} introduce \emph{SkillNet}, a human-AI collaborative framework for fine-grained action assessment that leverages expert feedback to refine AI models for transferable skill evaluation \cite{roy2026skillnet}. These methods highlight the transition from simple classification to structured, interpretable scoring, yet they often rely on global clip context rather than the repetition-level analysis required for fitness coaching.
+
+\subsection{Fitness AQA Datasets and Structured Supervision}
+Recent work has highlighted the importance of fitness-specific datasets and richer supervision for coaching-oriented AQA. FLEX introduces a large-scale multimodal, multiview dataset for fitness AQA, containing over 7,500 recordings of 20 weight-loaded exercises with synchronized RGB video, 3D pose, sEMG, and physiological signals \cite{flex}. FLEX further organizes expert annotations into a Fitness Knowledge Graph that links actions, key steps, error types, and feedback, enabling interpretable scoring and structured reasoning beyond a single numeric rating \cite{flex}. 
+
+Similarly, Fayez \emph{et al.} and Sharshar \emph{et al.} present \emph{VCOACH} and \emph{Camera Coach}, systems utilizing the \emph{MM-DOS} multi-modal dataset which includes synchronized RGB, thermal, and 3D skeleton data for activity recognition and assessment across several workout routines \cite{vcoach, cameracoach, sharshar2022mmdos}. By employing both classical machine learning and deep learning methods, these systems demonstrate high accuracy in evaluating exercise quality and identifying specific execution mistakes from visual streaming, emphasizing the value of multi-modal sensing in gym environments \cite{vcoach, cameracoach}. More recently, Hassan \emph{et al.} introduced \emph{ALEX-GYM-1}, a multi-camera view dataset with criterion-specific annotations and a hybrid model that fuses vision-based pathways with engineered landmark features to provide robust automated exercise evaluation \cite{hassan2025alexgym}.
+
+Our work is complementary to these large-scale or multi-modal efforts but targets a more constrained, practical setting: two consumer-phone RGB viewpoints (front and side) captured in real gym environments. In contrast to FLEX's multi-sensor approach \cite{flex} or the reliance on thermal data in VCOACH and Camera Coach \cite{vcoach, cameracoach}, we focus on a lightweight pose-based pipeline designed for deployability. We predict \emph{five aspect scores} per exercise using coach-provided 0--10 annotations fused with a reliability-weighted label, emphasizing accessibility and robustness under limited data rather than specialized sensor capture.
+
 \subsection{Pose-Based Motion Modeling}
-MediaPipe/BlazePose enables real-time pose landmark extraction from RGB video.
-Gait-ViT demonstrates the effectiveness of Transformer-based temporal modeling on gait sequences.
+Pose estimation enables low-cost kinematic representations from RGB video, supporting exercise analysis in consumer settings. MediaPipe/BlazePose provides real-time body landmark estimation and is widely used as a backbone for downstream pose-based recognition and assessment tasks.
+
+Beyond pose extraction, modeling temporal dynamics is central to performance. Kaushik \emph{et al.} demonstrate an AI-based posture correction system that uses pose estimation to provide real-time feedback on user form during exercises like curls and squats, emphasizing the importance of precise angle measurements for technical improvement \cite{kaushik2024posture}. While many systems adopt CNNs, RNNs, or graph-based models over skeletons, attention-based architectures have also been explored. For example, Gait-ViT applies a Vision Transformer to gait recognition using a gait energy image (GEI) representation, demonstrating that attention mechanisms can capture discriminative motion patterns for classification \cite{gaitvit}. Although gait recognition differs from fitness assessment, it motivates the use of temporal representations and global-context modeling for subtle motion distinctions. In our setting, we adopt a compact temporal CNN over resampled joint-angle sequences to balance modeling capacity with dataset scale and deployment constraints, and we incorporate explicit repetition parsing to align representations with the cyclical structure of resistance exercises.
+
 \subsection{What Makes Our Work Different}
-Most AQA work targets broad action categories and relies on large-scale training data, while our setting focuses on 15 gym exercises with a constrained dataset (51 volunteers) and two consumer-camera views.
-Unlike single-score AQA, we predict five \emph{aspect-level} scores per exercise (0--10), and explicitly model repetitions via segmentation and aggregation so multi-rep videos can be graded fairly.
+Compared to general AQA methods (e.g., exemplar-based relative scoring \cite{core}) and large-scale multimodal fitness benchmarks (e.g., multiview RGB+pose+sEMG with structured knowledge graphs \cite{flex}), our work targets a practical, consumer-camera coaching scenario with three defining properties.
+First, we focus on \emph{two-view mobile capture} (front/side) in real gyms, using pose features extracted from RGB video. Second, instead of predicting a single global quality score, we predict \emph{five aspect-level scores} per exercise (0--10), which better matches how coaches evaluate form. Third, we explicitly model \emph{repetitions}: we segment cyclic movements with exercise/view-specific biomechanical signals, encode each repetition, and aggregate repetitions into a subject-level representation aligned with set-level labels. Finally, because our dataset is small, we emphasize \emph{subject-disjoint} evaluation and multi-run reporting to quantify variance and avoid optimistic estimates.
+
 
 
 \section{Methods}
@@ -81,39 +127,22 @@ Participant heights ranged from 158 cm to 190 cm (mean: 174.2 cm), while body we
 All participants reported no current musculoskeletal injuries at the time of recording.
 
 
-\subsubsection{Exercise Set}
-The dataset includes recordings of 15 resistance training exercises covering both upper- and lower-body movements:
-
-\begin{itemize}
-    \item Dumbbell Shoulder Press
-    \item Hammer Curls
-    \item Standing Dumbbell Front Raises
-    \item Lateral Raises
-    \item Bulgarian Split Squat
-    \item EZ-Bar Curls
-    \item Incline Dumbbell Bench Press
-    \item Overhead Triceps Extension
-    \item Shrugs
-    \item Weighted Squats
-    \item Seated Biceps Curls
-    \item Triceps Kickbacks
-    \item Rows
-    \item Deadlift
-    \item Calf Raises
-\end{itemize}
+\subsubsection{Exercise set}
+The dataset includes recordings of 15 resistance training exercises covering both upper- and lower-body movements: 
+\textit{Dumbbell Shoulder Press, Hammer Curls, Standing Dumbbell Front Raises, Lateral Raises, Bulgarian Split Squat, EZ-Bar Curls, Incline Dumbbell Bench Press, Overhead Triceps Extension, Shrugs, Weighted Squats, Seated Biceps Curls, Triceps Kickbacks, Rows, Deadlift, Calf Raises.}
 
 Overall, the dataset contains a larger variety of upper-body exercise types than lower-body exercise types. However, the number of volunteers contributing to each exercise was approximately comparable across upper- and lower-body movements, reflecting natural participation during the recording sessions.
 
 
-\subsubsection{Recording Setup and Protocol}
+\subsubsection{Recording setup and protocol}
 All recordings were conducted indoors at multiple local gym facilities in Egypt. Videos were captured using a smartphone camera at a resolution of 1080~$\times$~1920 pixels and a frame rate of 30 frames per second, in landscape orientation. Lighting conditions varied across sessions, resulting in mixed indoor illumination.
 
-Camera height and distance were not strictly fixed and varied depending on the exercise, though recordings generally captured either the full body or were positioned at approximately waist level. Each video corresponds to a single exercise set lasting approximately 30 to 60 seconds and containing 8 to 12\textbf{ }repetitions, recorded as a continuous sequence.
+Camera height and distance were not strictly fixed and varied depending on the exercise, though recordings generally captured either the full body or were positioned at approximately waist level. Each video corresponds to a single exercise set lasting approximately 30 to 60 seconds and containing 8 to 12 repetitions, recorded as a continuous sequence.
 
 Participants performed exercises using self-selected weights to emulate realistic training conditions. Exercise execution was performed naturally, allowing for intra- and inter-subject variability in movement quality, which is essential for form assessment modeling.
 
 
-\subsubsection{Viewpoint Acquisition}
+\subsubsection{Viewpoint acquisition}
 To capture complementary kinematic information, each exercise was recorded from two viewpoints:
 \begin{itemize}
     \item Front view
@@ -123,7 +152,7 @@ To capture complementary kinematic information, each exercise was recorded from 
 A total of 154 videos per viewpoint were recorded, resulting in 308 videos overall. Each video was segmented into repetition-level clips, where each clip corresponds to a single exercise repetition. Viewpoints were manually labeled during preprocessing.
 
 
-\subsubsection{Expert Annotation}
+\subsubsection{Expert annotation}
 Each recorded exercise set was annotated by two certified fitness coaches using  reliability-weighted label $y=0.25y_{C1}+0.75y_{C2}$ based on a joint review of the corresponding front-view and side-view videos. Annotations were performed at the video (set) level, rather than at the individual repetition level.
 
 For each exercise, coaches evaluated five predefined biomechanical aspects specific to that movement, such as joint alignment, range of motion, stability, and movement control. These criteria were defined in advance for each exercise to ensure consistency across annotations.
@@ -131,13 +160,13 @@ For each exercise, coaches evaluated five predefined biomechanical aspects speci
 The resulting annotation scores represent an overall quality assessment of the exercise set and were used as supervisory signals for training and evaluating the proposed exercise assessment model. Repetition-level clips extracted from each video inherit the corresponding set-level annotation.
 
 
-\subsubsection{Dataset Limitations}
+\subsubsection{Dataset limitations}
 The dataset exhibits a gender imbalance, with a higher proportion of male participants, as well as a limited number of lower-body exercise samples. These limitations are primarily due to cultural and logistical constraints during data collection. Nevertheless, the dataset captures substantial inter-subject variability and realistic execution patterns, making it suitable for evaluating virtual coaching and exercise assessment systems.
 
 
 \subsection{System Overview}
 
-Figure~\ref{fig:pipeline} illustrates the end-to-end pipeline of our AI Virtual Coach. The system processes a single-view RGB video (either front or side) and produces structured textual feedback through four sequential stages.
+Fig.~\ref{fig:pipeline} illustrates the end-to-end pipeline of our AI Virtual Coach. The system processes a single-view RGB video (either front or side) and produces structured textual feedback through four sequential stages.
 
 \textbf{Stage 1: Pose Estimation and Feature Extraction.}
 Given an input video, we extract 3D pose landmarks for each frame using MediaPipe Pose Landmarker. The raw landmarks are normalized for scale and translation invariance (Section~\ref{sec:pose_gen}), and nine biomechanical joint angles are computed per frame. The resulting temporal sequence is resampled to a fixed length of $T=50$ timesteps, yielding a feature tensor of shape $(50, 9)$ per repetition.
@@ -247,10 +276,10 @@ The per-rep assessment scores, along with exercise-specific evaluation criteria,
 \subsection{Pose Data Generation}
 \label{sec:pose_gen}
 
-\subsubsection{Pose Landmark Extraction}
+\subsubsection{Pose landmark extraction}
 For each video frame, 3D human pose landmarks were extracted using the MediaPipe Pose Landmarker Lite model \cite{mediapipe}. The model produces 33 body landmarks per frame, each with $(x, y, z)$ coordinates, where $x$ and $y$ represent normalized image-plane coordinates and $z$ represents depth from the camera plane. Detection and tracking confidence thresholds were set to 0.3. Frames were converted from BGR to RGB color space for MediaPipe compatibility, and a fresh \texttt{PoseLandmarker} instance was created per video to ensure proper timestamp handling in VIDEO mode.
 
-\subsubsection{3D Landmark Normalization}
+\subsubsection{3D landmark normalization}
 To achieve scale and translation invariance with respect to camera distance and subject body size, all landmarks were normalized in 3D space using a torso-length-based transformation. First, the pelvis center $\mathbf{p}$ was computed as the midpoint of the left hip (landmark 23) and right hip (landmark 24):
 \begin{equation}
 \mathbf{p} = \frac{1}{2}(\mathbf{h}_{23} + \mathbf{h}_{24}),
@@ -269,19 +298,19 @@ Finally, each landmark $\mathbf{h}_i$ was normalized as:
 \end{equation}
 Frames with invalid torso length ($L < 10^{-6}$) were discarded to ensure numerical stability.
 
-\subsubsection{Joint Angle Computation}
+\subsubsection{Joint angle computation}
 From the normalized 3D landmarks, nine biomechanical joint angles were computed per frame using the 3D dot product formula. For each angle defined by a triplet of landmarks $(a, b, c)$ where $b$ is the joint vertex, the angle $\theta$ was calculated as:
 \begin{equation}
 \theta = \arccos\left(\frac{\mathbf{v}_1 \cdot \mathbf{v}_2}{\|\mathbf{v}_1\| \|\mathbf{v}_2\|}\right),
 \end{equation}
 where $\mathbf{v}_1 = \mathbf{h}_a - \mathbf{h}_b$ and $\mathbf{v}_2 = \mathbf{h}_c - \mathbf{h}_b$ are vectors in 3D space. The nine angles extracted were: left and right elbow (landmarks 11-13-15 and 12-14-16), left and right shoulder (13-11-23 and 14-12-24), left and right hip (11-23-25 and 12-24-26), left and right knee (23-25-27 and 24-26-28), and torso lean (computed from mid-shoulder and pelvis alignment).
 
-\subsubsection{Temporal Feature Representation}
+\subsubsection{Temporal feature representation}
 For each exercise repetition, the nine joint angle time series were resampled to a fixed temporal length of $T_{\text{fixed}} = 50$ frames using linear interpolation to enable batch processing and model training. Let $\theta_j^{(t)}$ denote the $j$-th angle at original time index $t \in [0, T_{\text{orig}}-1]$. We defined a normalized time axis $\tau \in [0, 1]$ and applied linear interpolation to obtain angle values at target time indices $\tau' \in [0, 1]$ uniformly spaced with $T_{\text{fixed}}$ points. This resampling process produced temporal feature tensors of shape $(N_{\text{reps}}, 50, 9)$, where $N_{\text{reps}}$ is the total number of repetitions across all volunteers and exercises.
 
 Edge cases were handled as follows: sequences with $T_{\text{orig}} = 0$ were filled with zeros, single-frame sequences ($T_{\text{orig}} = 1$) were replicated across all 50 timesteps, and sequences with $T_{\text{orig}} > 1$ underwent standard linear interpolation.
 
-\subsubsection{Tempo Preservation}
+\subsubsection{Tempo preservation}
 Since resampling to a fixed length inherently discards information about exercise execution speed, we explicitly preserved tempo as separate feature arrays. For each repetition, we computed: (i) \textbf{tempo\_duration\_sec}, the FPS-normalized duration in seconds calculated as $D = T_{\text{orig}} / \text{FPS}$, where $\text{FPS}$ is the video frame rate; (ii) \textbf{tempo\_frame\_count}, the total number of frames in the original video; and (iii) \textbf{tempo\_fps}, the original video FPS. These tempo features allow the model to distinguish between fast and slow executions of the same exercise, which is critical for movement quality assessment.
 
 All processed pose data, including temporal angle sequences and tempo metadata, were stored in compressed NumPy archive (NPZ) format with data type \texttt{float32} for use in exercise recognition and assessment tasks.
@@ -291,37 +320,35 @@ All processed pose data, including temporal angle sequences and tempo metadata, 
 \subsection{Exercise Recognition}
 The exercise recognition module classifies 15 resistance training exercises from temporal pose sequences using a multilayer perceptron (MLP). This module processes the temporal features extracted as described in Section~III-B and performs subject-disjoint classification to ensure generalization to unseen individuals.
 
-\subsubsection{Model Architecture}
+\subsubsection{Model architecture}
 The temporal pose sequences of shape $(N, 50, 9)$ were flattened into 450-dimensional feature vectors, where each vector represents the concatenated time series of nine joint angles over 50 timesteps. A feedforward neural network with three hidden layers was employed, with layer sizes of 384, 192, and 96 neurons respectively. Each hidden layer was followed by ReLU activation and dropout regularization with a dropout rate of 0.30 to prevent overfitting. The output layer consisted of 15 neurons with softmax activation for multi-class classification.
 
-\subsubsection{Training Protocol}
+\subsubsection{Training protocol}
 The model was trained using the Adam optimizer with a learning rate of $8 \times 10^{-5}$ and a batch size of 16. Training was conducted for a maximum of 200 epochs with early stopping monitoring validation loss, using a patience of 50 epochs and restoring the best weights upon convergence. Learning rate reduction on plateau was enabled with a factor of 0.5 and a patience of 15 epochs. The loss function was sparse categorical cross-entropy, and both accuracy and macro-averaged F1 score were monitored during training.
 
 \subsection{Assessment Module}
-Our assessment framework converts raw exercise videos into \emph{subject-level} performance scores through four stages: pose-based feature construction, repetition segmentation, repetition-to-subject aggregation, and multi-aspect regression. The full pose preprocessing and temporal feature representation are described in Section~III-B.
+Our assessment framework converts raw exercise videos into \emph{subject-level} performance scores through four stages: pose-based feature construction, repetition segmentation, repetition-to-subject aggregation, and multi-aspect regression. Pose preprocessing and temporal feature representation are described in Section~III-B.
 
-\subsubsection{Pose Extraction and Kinematic Feature Construction}
-Each frame is processed with MediaPipe to obtain 3D pose landmarks (33 keypoints). As described in Section~III-B, landmarks are normalized in 3D for scale and translation invariance, and a compact set of nine biomechanical joint-angle features is computed per frame. For each detected repetition, the resulting angle time series is resampled to a fixed length of $T=50$ time steps, producing a tensor of shape $(N_{\text{reps}}, 50, 9)$.
-Because temporal resampling removes absolute speed information, we preserve repetition tempo as additional metadata (e.g., original frame count and duration in seconds), enabling the model to distinguish fast and slow executions.
+\subsubsection{Pose extraction and feature representation}
+From each repetition, we use the temporal joint-angle features described in Section~III-B, yielding a tensor of shape $(N_{\text{reps}}, 50, 9)$ (nine joint-angle signals over $T=50$ time steps). Since resampling to a fixed length removes absolute speed information, we preserve repetition tempo as separate metadata (e.g., repetition duration in seconds and original frame count), which can be fused with learned embeddings when needed.
 
-\subsubsection{Repetition Segmentation via Exercise/View-Specific Signals}
-We segment repetitions directly from the pose stream using a 1D exercise/view-specific ``rep signal'' designed to capture the primary biomechanical cycle of the movement (e.g., wrist/arm elevation for raises and pressing, elbow flexion for curls, hip/knee depth for squats and split squats). The rep signal is temporally smoothed, and repetitions are detected using a robust threshold-based cycle logic (up--down--up or down--up--down) with:
-(i) adaptive thresholds (computed from within-video statistics) to handle subject variability,
+\subsubsection{Repetition segmentation via exercise/view-specific signals}
+We segment repetitions from the pose stream using an exercise/view-specific 1D ``rep signal'' designed to capture the primary biomechanical cycle of the movement (e.g., arm elevation for raises/pressing, elbow flexion for curls, and hip/knee depth for squats and split squats). The rep signal is smoothed and repetitions are detected using a robust threshold-based cycle logic (up--down--up or down--up--down) with:
+(i) adaptive thresholds computed from within-video statistics to handle subject variability,
 (ii) hysteresis to prevent rapid state flipping near thresholds, and
-(iii) minimum-duration and minimum-separation constraints to avoid double counting due to noise.
-This yields a variable number of repetitions $N_{\text{reps}}$ per video.
+(iii) minimum-duration and minimum-separation constraints to reduce double counting due to noise.
+This produces a variable number of repetitions $N_{\text{reps}}$ per video.
 
-\subsubsection{Repetition Windowing and Subject-Level Aggregation}
-Each detected repetition is represented as a fixed-length temporal window (already resampled to $T=50$) of the nine angle features. A temporal encoder maps each repetition $r$ to an embedding $e_r \in \mathbb{R}^d$.
-Since ground-truth annotations are provided at the \emph{set/video} level (not per repetition), we aggregate the repetition embeddings into a single subject-level representation using masked attention pooling to handle variable $N_{\text{reps}}$:
+\subsubsection{Subject-level aggregation of multiple repetitions}
+Because labels are provided at the set/video level (not per repetition), we aggregate multiple repetitions from the same volunteer into a single subject-level sample. Each repetition window is first encoded into an embedding $e_r \in \mathbb{R}^d$. We then perform masked attention pooling to handle variable $N_{\text{reps}}$:
 \begin{equation}
 \alpha_r = \frac{m_r \exp(a(e_r))}{\sum_k m_k \exp(a(e_k))}, \qquad
 e_{\text{subj}} = \sum_r \alpha_r e_r,
 \end{equation}
 where $a(\cdot)$ is a lightweight scoring network and $m_r \in \{0,1\}$ is a binary mask indicating valid repetitions.
 
-\subsubsection{Temporal CNN Regressor and Training Objective}
-We use a compact temporal CNN (1D convolutions over the time axis) to encode each repetition window and produce $e_r$. A shallow prediction head outputs five aspect scores per sample. During training, target labels are normalized to $[0,1]$ and optimized with mean squared error (MSE). At inference, outputs are rescaled to the original 0--10 range.
+\subsubsection{Temporal CNN regressor and training objective}
+We use a compact temporal CNN (1D convolutions over time) to encode each repetition sequence and produce $e_r$, followed by an aggregation module and a shallow prediction head that outputs five aspect scores. During training, targets are normalized to $[0,1]$ and optimized with mean squared error (MSE). At inference, predictions are rescaled to the original 0--10 range.
 
 When two coaches provide scores for a given set, we use a reliability-weighted fusion:
 \begin{equation}
@@ -345,10 +372,11 @@ For exercise recognition, both accuracy and macro-averaged F1 score were monitor
 
 \section{Results and Discussion}
 
+\FloatBarrier
 \subsection{Exercise Recognition Results}
 Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 30 runs for both front and side views on the temporal pose data. The side-view model achieved a mean test accuracy of $89.26\% \pm 2.64\%$ and a mean macro-averaged F1 score of $87.74\% \pm 2.88\%$, while the front-view model achieved $76.16\% \pm 4.57\%$ accuracy and $75.08\% \pm 5.07\%$ macro F1. The side view consistently outperformed the front view by approximately 13 percentage points, suggesting that lateral body profiles provide more discriminative pose features for distinguishing between exercises.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \caption{Exercise Recognition Results (30 Runs per View)}
 \label{tab:exer_recog_results}
@@ -365,25 +393,62 @@ Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 
 \end{tabular}
 \end{table}
 
-Per-class F1 scores for the side view revealed strong performance across most exercises, with several classes achieving F1 scores above 0.95 (Deadlift: 0.962, Rows: 0.960, Seated Biceps Curls: 0.977, Triceps Kickbacks: 0.957, Weighted Squats: 0.955). Classes with lower performance included Overhead Triceps Extension (0.654) and Shrugs (0.590), likely due to subtle biomechanical differences that are difficult to capture from the side view alone. Figures~\ref{fig:confusion_side} and~\ref{fig:confusion_front} present the aggregated normalized confusion matrices for side and front views respectively, averaged across all 30 runs. Both views show strong diagonal dominance, though the front view exhibits more inter-class confusion, particularly among curl variants and raises.
+Per-class F1 scores for the side view revealed strong performance across most exercises, with several classes achieving F1 scores above 0.95 (Deadlift: 0.962, Rows: 0.960, Seated Biceps Curls: 0.977, Triceps Kickbacks: 0.957, Weighted Squats: 0.955). Classes with lower performance included Overhead Triceps Extension (0.654) and Shrugs (0.590), likely due to subtle biomechanical differences that are difficult to capture from the side view alone. Figs.~\ref{fig:confusion_side} and~\ref{fig:confusion_front} present the aggregated normalized confusion matrices for side and front views respectively, averaged across all 30 runs. Both views show strong diagonal dominance, though the front view exhibits more inter-class confusion, particularly among curl variants and raises.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.48\textwidth]{confusion_matrix_side_temporal.png}
+\includegraphics[width=0.48\textwidth]{confusion_matrix_side.png}
 \caption{Aggregated confusion matrix for exercise recognition (side view, mean across 30 runs, normalized). Strong diagonal indicates robust per-class performance.}
 \label{fig:confusion_side}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.48\textwidth]{confusion_matrix_front_temporal.png}
+\includegraphics[width=0.48\textwidth]{confusion_matrix_front.png}
 \caption{Aggregated confusion matrix for exercise recognition (front view, mean across 30 runs, normalized). More inter-class confusion is visible compared to the side view.}
 \label{fig:confusion_front}
 \end{figure}
 
-\subsection{Assessment Results (Front vs Side)}
-%% TODO: Add assessment results tables and discussion
 
+\FloatBarrier
+\subsection{Assessment Results (Front vs Side)}
+Table~\ref{tab:assessment_mae} reports the assessment Mean Absolute Error (MAE) on the 0--10 scale (lower is better), summarized as mean $\pm$ standard deviation across 10 randomized runs per exercise per view (subject-disjoint splits with best-checkpoint selection per run). Overall, front and side views achieve comparable pooled performance (Front: $3.54 \pm 1.21$, Side: $3.51 \pm 1.26$), suggesting that both viewpoints contain sufficient information for aspect-level scoring in our setting.
+
+Performance varies by exercise and view. For example, \emph{Rows} achieves the lowest MAE in both views ($2.26$ front, $2.14$ side), while more challenging exercises such as \emph{Triceps Kickbacks} and \emph{Deadlift} yield higher MAE (around $4.5$--$4.8$). View dependence is also observable: some movements benefit from side-view kinematics (e.g., \emph{Overhead Triceps Extension}), whereas others are better captured from the front view (e.g., \emph{Incline Dumbbell Bench Press}). The reported standard deviations reflect sensitivity to random splits and the limited number of test subjects per exercise, motivating multi-run reporting for a more reliable estimate of performance.
+
+\begin{table}[!t]
+\caption{Exercise assessment MAE (0--10; lower is better), reported as mean $\pm$ std over 10 runs per exercise and view.}
+\label{tab:assessment_mae}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}p{2.9cm}cc@{}}
+\toprule
+\textbf{Exercise} & \textbf{Front} & \textbf{Side} \\
+\midrule
+Bulgarian Split Squat & $4.33 \pm 1.23$ & $4.43 \pm 1.05$ \\
+Calf Raises & $3.54 \pm 1.00$ & $3.36 \pm 0.90$ \\
+Deadlift & $4.53 \pm 0.98$ & $4.68 \pm 1.36$ \\
+Dumbbell Shoulder Press & $3.43 \pm 0.75$ & $3.49 \pm 0.60$ \\
+EZ-Bar Curls & $3.26 \pm 0.55$ & $3.26 \pm 0.71$ \\
+Hammer Curls & $3.41 \pm 0.92$ & $3.35 \pm 1.23$ \\
+Incline DB Bench Press & $2.42 \pm 1.05$ & $3.31 \pm 0.82$ \\
+Lateral Raises & $4.53 \pm 0.96$ & $4.30 \pm 0.80$ \\
+Overhead Triceps Ext. & $3.91 \pm 1.17$ & $3.44 \pm 1.43$ \\
+Rows & $2.26 \pm 0.86$ & $2.14 \pm 0.99$ \\
+Seated Biceps Curls & $2.94 \pm 1.20$ & $2.61 \pm 1.04$ \\
+Shrugs & $4.01 \pm 1.08$ & $3.93 \pm 1.24$ \\
+Standing Front Raises & $2.83 \pm 1.01$ & $2.64 \pm 1.17$ \\
+Triceps Kickbacks & $4.80 \pm 0.92$ & $4.61 \pm 0.65$ \\
+Weighted Squats & $2.98 \pm 0.85$ & $3.10 \pm 1.58$ \\
+\midrule
+\textbf{Overall} & $\mathbf{3.54 \pm 1.21}$ & $\mathbf{3.51 \pm 1.26}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
 \subsection{Discussion}
 %% TODO: discuss small data effects (few test subjects), segmentation robustness, view differences.
 %% Mention that mean±std across runs helps show stability despite limited data.
@@ -404,7 +469,7 @@ Per-class F1 scores for the side view revealed strong performance across most ex
 
 
 \section*{Acknowledgment}
-%% Optional: recognize individuals who provided assistance with your work
+AI-generated text was used in drafting portions of this manuscript with Claude Opus 4.5, Claude Sonnet 4.5, and ChatGPT 5.2.
 
 
 \bibliographystyle{IEEEtran}

@@ -172,6 +172,146 @@ def load_pose_temporal_data(npz_path: str) -> Tuple[List[Tuple[str, np.ndarray, 
     return dataset, summary
 
 
+def load_pose_enhanced_data(
+    npz_path: str,
+    feature_type: str = 'all'
+) -> Tuple[List[Tuple[str, np.ndarray, str, str]], Dict]:
+    """Load enhanced pose features (angles + distances + specialized) from NPZ file.
+    
+    This loader supports the v2/v3 NPZ format that includes:
+    - X_landmarks: Raw normalized landmarks (N, T, 33, 3)
+    - X_angles: Joint angle features (N, T, 13)
+    - X_distances: Distance-based features (N, T, 6)
+    - X_all_features: Combined features (N, T, 19)
+    - X_specialized: Specialized discrimination features (N, T, 18) [v3+]
+    
+    Args:
+        npz_path (str): Path to enhanced pose NPZ file (front or side view).
+        feature_type (str): Which features to load:
+            - 'angles': 13 joint angles only (backward compatible)
+            - 'distances': 6 distance features only
+            - 'all': 19 combined features (13 angles + 6 distances)
+            - 'landmarks': Raw normalized landmarks (33, 3) per frame
+            - 'specialized': 18 specialized discrimination features [v3+]
+            - 'all_extended': 37 features (19 base + 18 specialized) [v3+]
+            - 'base_specialized': Alias for 'all_extended' (37 features)
+        
+    Returns:
+        Tuple containing:
+        - dataset: List of (exercise_name, features, subject_id, view) tuples
+        - summary: Dict with count, unique_subjects, unique_classes, feature_names, etc.
+        
+    Raises:
+        FileNotFoundError: If NPZ file doesn't exist.
+        KeyError: If NPZ file is missing required fields.
+        ValueError: If feature_type is invalid.
+    """
+    view_label = 'front' if 'front' in str(npz_path).lower() else 'side'
+    
+    data = np.load(npz_path, allow_pickle=True)
+    
+    # Select feature array based on feature_type
+    if feature_type == 'angles':
+        if 'X_angles' in data:
+            features = data['X_angles']
+            feature_names = [str(name) for name in data['angle_names']]
+        elif 'X_temporal' in data:
+            # Fallback to old format
+            features = data['X_temporal']
+            feature_names = [str(name) for name in data['angle_names']]
+        else:
+            raise KeyError(f"NPZ file at {npz_path} is missing 'X_angles' or 'X_temporal' field.")
+    elif feature_type == 'distances':
+        if 'X_distances' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_distances' field. "
+                "Please use an enhanced pose NPZ file (v2+)."
+            )
+        features = data['X_distances']
+        feature_names = [str(name) for name in data['distance_names']]
+    elif feature_type == 'all':
+        if 'X_all_features' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_all_features' field. "
+                "Please use an enhanced pose NPZ file (v2+)."
+            )
+        features = data['X_all_features']
+        feature_names = [str(name) for name in data['all_feature_names']]
+    elif feature_type == 'landmarks':
+        if 'X_landmarks' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_landmarks' field. "
+                "Please use an enhanced pose NPZ file (v2+)."
+            )
+        features = data['X_landmarks']
+        feature_names = ['landmark_coords']  # (33, 3) per frame
+    elif feature_type == 'specialized':
+        if 'X_specialized' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_specialized' field. "
+                "Please use an enhanced pose NPZ file (v3+) with specialized features."
+            )
+        features = data['X_specialized']
+        feature_names = [str(name) for name in data['specialized_feature_names']]
+    elif feature_type in ('all_extended', 'base_specialized'):
+        # Combine base features (19) with specialized features (18) = 37 total
+        if 'X_all_features' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_all_features' field. "
+                "Please use an enhanced pose NPZ file (v2+)."
+            )
+        if 'X_specialized' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_specialized' field. "
+                "Please use an enhanced pose NPZ file (v3+) with specialized features."
+            )
+        base_features = data['X_all_features']
+        specialized_features = data['X_specialized']
+        features = np.concatenate([base_features, specialized_features], axis=2)
+        base_names = [str(name) for name in data['all_feature_names']]
+        specialized_names = [str(name) for name in data['specialized_feature_names']]
+        feature_names = base_names + specialized_names
+    else:
+        raise ValueError(
+            f"Invalid feature_type: {feature_type}. "
+            "Use 'angles', 'distances', 'all', 'landmarks', 'specialized', "
+            "'all_extended', or 'base_specialized'."
+        )
+    
+    exercise_names = data['exercise_names']
+    subject_ids = data['subject_ids']
+    
+    dataset: List[Tuple[str, np.ndarray, str, str]] = []
+    for feat, exercise_name, subject_id in zip(features, exercise_names, subject_ids):
+        subject = _normalize_subject_id(str(int(subject_id)))
+        features_array = np.asarray(feat, dtype=np.float32)
+        dataset.append((exercise_name, features_array, subject, view_label))
+    
+    temporal_shape = features.shape[1:]
+    
+    summary = {
+        'count': len(dataset),
+        'unique_subjects': len(set(item[2] for item in dataset)),
+        'unique_classes': len(set(item[0] for item in dataset)),
+        'view': view_label,
+        'feature_type': feature_type,
+        'feature_names': feature_names,
+        'temporal_shape': temporal_shape,
+    }
+    
+    logger.info(
+        "[load_pose_enhanced_data] Loaded %s samples (%s subjects, %s classes) from %s view, "
+        "feature_type=%s, shape=%s",
+        summary['count'],
+        summary['unique_subjects'],
+        summary['unique_classes'],
+        view_label,
+        feature_type,
+        temporal_shape,
+    )
+    return dataset, summary
+
+
 def _normalize_subject_id(subject_id: str) -> str:
     """Canonicalize folder-level subject identifiers for reliable splits.
 

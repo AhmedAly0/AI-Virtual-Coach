@@ -1,0 +1,101 @@
+# Experiment 6: Enhanced Pose MLP with Specialized Features (FRONT VIEW)
+# 
+# Enhanced features targeting confusion clusters:
+# 1. Curl variants (Hammer, EZ Bar, Seated Biceps) - grip/arm angle features
+# 2. Deadlift ↔ Rows - torso dynamics, shoulder retraction
+# 3. Triceps Kickbacks ↔ Rows - wrist positioning
+# 4. Shrugs ↔ Calf Raises - elevation features
+#
+# Feature sets available:
+#   - 'all': 19 base features (13 angles + 6 distances)
+#   - 'specialized': 18 specialized discrimination features
+#   - 'all_extended' or 'base_specialized': 37 total features (19 base + 18 specialized)
+
+dataset:
+  random_seed: 42
+  val_ratio: 0.15
+  test_ratio: 0.45
+  stratified: true
+  
+  # Feature selection configuration
+  # ---------------------------------
+  # feature_type options:
+  #   - 'all': 19 base features only (baseline)
+  #   - 'specialized': 18 specialized discrimination features only
+  #   - 'all_extended' or 'base_specialized': 37 features (19 base + 18 specialized) [RECOMMENDED]
+  feature_type: 'all_extended'
+  
+  # selected_features: Fine-grained selection (use ['all'] to use all from feature_type)
+  selected_features: ['all']
+
+
+model:
+  # Architecture scaled for 37 features × 50 timesteps = 1850 input dimensions
+  hidden_sizes: [1024, 640, 320, 160]
+  dropout: 0.35
+  num_classes: 15
+
+training:
+  batch_size: 16
+  lr: 0.00005
+  max_epochs: 250
+  optimizer: adam
+
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: val_loss
+    patience: 70  # Increased for larger feature space
+    restore_best_weights: true
+    min_delta: 0.0
+  reduce_lr_on_plateau:
+    enabled: true
+    monitor: val_loss
+    factor: 0.5
+    patience: 20
+    min_lr: 1.0e-7
+    verbose: 1
+
+multi_run:
+  enabled: true
+  num_runs: 30
+  base_seed: 42
+  save_all_runs: true
+  save_all_confusion_matrices: true
+  aggregation:
+    compute_stats: true
+    compute_per_class_f1: true
+    metrics:
+      - test_accuracy
+      - test_macro_f1
+
+results:
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_phase2_extended/front
+  save_metrics: true
+  save_confusion_matrix: true
+  save_history: true
+
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+metrics:
+  primary: macro_f1
+  secondary:
+    - accuracy
+    - loss
+
+# Ablation study configurations (for reference)
+# Run these separately by changing feature_type:
+#
+# A. Baseline (Phase 1): feature_type='all' (19 features)
+#    - Hidden: [512, 256, 128], Dropout: 0.35
+#
+# B. Base + Velocity: feature_type='all' + compute velocity at runtime
+#    - Hidden: [576, 288, 144], Dropout: 0.38
+#
+# C. Base + Specialized: combine 'all' and 'specialized' (33 features)
+#    - Hidden: [576, 288, 144], Dropout: 0.38
+#
+# D. Full Extended: feature_type='all_extended' (40 features) [THIS CONFIG]
+#    - Hidden: [640, 320, 160], Dropout: 0.40

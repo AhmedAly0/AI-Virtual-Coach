@@ -1,29 +1,42 @@
 # Experiment 6: Pose-based MLP baseline configuration (SIDE VIEW - TEMPORAL)
-# Temporal pose features (13 angles × 50 timesteps) - Experiment #1 Enhanced
-# NEW: Added ankle angles (for Calf Raises) and wrist angles (for arm curls)
+# Temporal pose features with configurable feature selection
+# Supports: angles-only, distances-only, or all features (19 = 13 angles + 6 distances)
 
 dataset:
   random_seed: 42
   val_ratio: 0.15
   test_ratio: 0.30
   stratified: true
-  # Select specific angles to use for training
-  # Options: ['all'] to use all 13 angles, or list specific angles:
-  # Available angles: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
-  #                    'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
-  #                    'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist']
-  # Each angle contributes temporal sequence features
-  selected_angles: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean']  # Use all 13 angles
+  
+  # Feature selection configuration
+  # ---------------------------------
+  # feature_type: Which feature group to load from NPZ file
+  #   - 'angles': 13 joint angles only
+  #   - 'distances': 6 distance features only
+  #   - 'all': 19 combined features (13 angles + 6 distances) [RECOMMENDED]
+  feature_type: 'all'
+  
+  # selected_features: Fine-grained selection of individual features by name
+  # Options: ['all'] to use all features from feature_type, or list specific feature names:
+  # Angle names: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
+  #               'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
+  #               'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist']
+  # Distance names: ['left_ear_shoulder_vert', 'right_ear_shoulder_vert',
+  #                  'left_wrist_shoulder_dist', 'right_wrist_shoulder_dist',
+  #                  'left_elbow_hip_dist', 'right_elbow_hip_dist']
+  selected_features: ['all']
 
 
 model:
-  hidden_sizes: [384, 192, 96]  # Increased capacity for 13 angles (was [384, 192, 96])
-  dropout: 0.30  # Increased from 0.30 to prevent overfitting on larger features
+  # Architecture adjusted for feature_type='all' (19 features × 50 timesteps = 950 input)
+  # For angles-only (13 × 50 = 650), consider [384, 192, 96]
+  hidden_sizes: [512, 256, 128]
+  dropout: 0.35
   num_classes: 15
 
 training:
   batch_size: 16
-  lr: 0.00008
+  lr: 0.00006
   max_epochs: 200
   optimizer: adam
 

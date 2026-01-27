@@ -1,4 +1,23 @@
-"""Experiment 6: Pose-based MLP baseline for exercise recognition using static features."""
+"""Experiment 6: Pose-based MLP for exercise recognition.
+
+This module provides training functions for MLP models using enhanced pose features
+(13 joint angles + 6 pairwise distances = 19 features per timestep).
+
+Training Functions:
+    - train_experiment_6: Single run training
+    - train_experiment_6_multi_run: Multiple runs with different seeds for robust evaluation
+
+The training functions use load_pose_enhanced_data() which supports:
+    - feature_type: 'angles' (13), 'distances' (6), 'all' (19)
+    - feature_type: 'specialized' (18) - Confusion cluster discrimination features
+    - feature_type: 'all_extended' or 'base_specialized' (37) - Full feature set
+    - selected_features: Individual feature names for fine-grained selection
+
+Config files:
+    - config/experiment_6_temporal_front.yaml (front view - baseline 19 features)
+    - config/experiment_6_temporal_side.yaml (side view - baseline 19 features)
+    - config/experiment_6_ablation_specialized_front.yaml (front view - 37 features)
+"""
 
 import gc
 import json
@@ -14,8 +33,7 @@ import tensorflow as tf
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data import load_pose_data
-from src.data.data_loader import load_pose_temporal_data
+from src.data.data_loader import load_pose_enhanced_data
 from src.data.dataset_builder import make_pose_split_three_way, build_pose_datasets_three_way
 from src.utils.io_utils import set_global_seed, load_config, setup_results_folder
 from src.utils.metrics import macro_f1_score, per_class_f1_scores
@@ -29,67 +47,11 @@ if not logging.getLogger().handlers:
 logger.propagate = True
 
 
-def _filter_pose_features(dataset: List[Tuple], selected_angles: List[str], all_angle_names: List[str]) -> List[Tuple]:
-    """Filter pose features to include only selected angles.
-    
-    Args:
-        dataset (List[Tuple]): Dataset with (label, features, subject_id, view) tuples.
-        selected_angles (List[str]): List of angle names to keep (e.g., ['left_elbow', 'right_knee']).
-        all_angle_names (List[str]): Complete list of angle names from NPZ file.
-    
-    Returns:
-        List[Tuple]: Filtered dataset with reduced feature dimensionality.
-    """
-    if not selected_angles or selected_angles == ['all']:
-        return dataset  # Use all angles
-    
-    # Find indices of selected angles
-    angle_indices = []
-    for angle_name in selected_angles:
-        if angle_name in all_angle_names:
-            angle_indices.append(all_angle_names.index(angle_name))
-        else:
-            logger.warning(f"Angle '{angle_name}' not found in dataset. Available: {all_angle_names}")
-    
-    if not angle_indices:
-        raise ValueError(f"No valid angles selected. Available angles: {all_angle_names}")
-    
-    # Each angle has 5 features (mean, std, min, max, range)
-    # For static features: columns are organized as [angle0_feat0-4, angle1_feat0-4, ...]
-    feature_indices = []
-    for angle_idx in angle_indices:
-        start_col = angle_idx * 5
-        feature_indices.extend(range(start_col, start_col + 5))
-    
-    # Filter features for each sample
-    filtered_dataset = []
-    for item in dataset:
-        # Handle both 3-tuple (label, features, subject_id) and 4-tuple (label, features, subject_id, view)
-        if len(item) == 4:
-            label, features, subject_id, view = item
-            filtered_features = features[feature_indices]
-            filtered_dataset.append((label, filtered_features, subject_id, view))
-        else:
-            label, features, subject_id = item
-            filtered_features = features[feature_indices]
-            filtered_dataset.append((label, filtered_features, subject_id))
-    
-    logger.info(
-        "Filtered features: %d angles selected (%s) -> %d features (from original %d)",
-        len(angle_indices),
-        ', '.join([all_angle_names[i] for i in angle_indices]),
-        len(feature_indices),
-        features.shape[0]
-    )
-    
-    return filtered_dataset
-
-
 def _build_mlp(input_dim: int, num_classes: int, hidden_sizes: Tuple[int, ...], dropout: float, lr: float) -> tf.keras.Model:
-    """Simple MLP baseline for pose static features.
+    """Build MLP model for pose features.
 
     Args:
-        input_dim (int): Feature dimension of pose vectors (45 for single view).
+        input_dim (int): Feature dimension of flattened pose vectors.
         num_classes (int): Number of exercise classes.
         hidden_sizes (Tuple[int, ...]): Dense layer sizes.
         dropout (float): Dropout rate applied after each hidden layer.
@@ -154,205 +116,6 @@ def _build_callbacks(config: Dict) -> List[tf.keras.callbacks.Callback]:
     return callbacks
 
 
-def train_experiment_6_static(
-    npz_path: str,
-    config_path: str = 'config/experiment_6.yaml',
-    *,
-    results_folder: Optional[str] = None,
-    run_idx: Optional[int] = None,
-    # Legacy parameters for backward compatibility
-    val_ratio: Optional[float] = None,
-    test_ratio: Optional[float] = None,
-    seed: Optional[int] = None,
-    batch_size: Optional[int] = None,
-    hidden_sizes: Optional[Tuple[int, ...]] = None,
-    dropout: Optional[float] = None,
-    lr: Optional[float] = None,
-    stratified: Optional[bool] = None,
-    max_epochs: Optional[int] = None,
-) -> Dict:
-    """Train a pose-based MLP baseline with subject-wise stratified splits using static features.
-
-    Args:
-        npz_path (str): Path to pose static NPZ file (front or side view).
-        config_path (str): Path to YAML configuration file. Defaults to 'config/experiment_6.yaml'.
-        results_folder (Optional[str]): Pre-created results folder path (used in multi-run mode).
-        run_idx (Optional[int]): Run index for naming (used in multi-run mode).
-        
-        Legacy parameters (overridden by config if None):
-        val_ratio (Optional[float]): Fraction of subjects for validation split.
-        test_ratio (Optional[float]): Fraction of subjects for test split.
-        seed (Optional[int]): Random seed for reproducibility.
-        batch_size (Optional[int]): Batch size for tf.data pipelines.
-        hidden_sizes (Optional[Tuple[int, ...]]): Hidden layer widths for the MLP.
-        dropout (Optional[float]): Dropout rate after each hidden layer.
-        lr (Optional[float]): Learning rate for Adam.
-        stratified (Optional[bool]): Ensure all classes appear in train/val/test when possible.
-        max_epochs (Optional[int]): Training epochs with early stopping.
-
-    Returns:
-        Dict: Training history, label maps, split sizes, and test metrics including macro F1.
-    """
-
-    # Load configuration
-    config = load_config(config_path)
-    
-    # Extract hyperparameters from config (or use legacy parameters if provided)
-    val_ratio = val_ratio if val_ratio is not None else config['dataset']['val_ratio']
-    test_ratio = test_ratio if test_ratio is not None else config['dataset']['test_ratio']
-    seed = seed if seed is not None else config['dataset']['random_seed']
-    batch_size = batch_size if batch_size is not None else config['training']['batch_size']
-    hidden_sizes = hidden_sizes if hidden_sizes is not None else tuple(int(x) for x in config['model']['hidden_sizes'])
-    dropout = dropout if dropout is not None else config['model']['dropout']
-    lr = lr if lr is not None else config['training']['lr']
-    stratified = stratified if stratified is not None else config['dataset']['stratified']
-    max_epochs = max_epochs if max_epochs is not None else config['training']['max_epochs']
-    
-    # Setup results folder if not provided (single-run mode)
-    if results_folder is None:
-        base_results_dir = config['results']['base_dir']
-        results_folder, run_idx = setup_results_folder(base_results_dir)
-        logger.info("Experiment 6 (static) results directory: %s", results_folder)
-    
-    set_global_seed(seed)
-
-    dataset, pose_summary = load_pose_data(npz_path)
-    
-    # Filter features based on selected angles (if specified in config)
-    selected_angles = config.get('dataset', {}).get('selected_angles', ['all'])
-    if selected_angles and selected_angles != ['all']:
-        if 'angle_names' not in pose_summary:
-            raise KeyError(
-                "NPZ file is missing 'angle_names' field but config specifies selected_angles. "
-                "Please regenerate the NPZ file or set selected_angles to ['all']."
-            )
-        angle_names = pose_summary['angle_names']
-        dataset = _filter_pose_features(dataset, selected_angles, angle_names)
-
-    train_samples, val_samples, test_samples, label_to_int = make_pose_split_three_way(
-        dataset,
-        val_ratio=val_ratio,
-        test_ratio=test_ratio,
-        seed=seed,
-        stratified=stratified,
-    )
-
-    train_ds, val_ds, test_ds, X_train, y_train, X_val, y_val, X_test, y_test = build_pose_datasets_three_way(
-        train_samples,
-        val_samples,
-        test_samples,
-        label_to_int,
-        batch_size=batch_size,
-    )
-
-    input_dim = X_train.shape[1]
-    num_classes = len(label_to_int)
-    int_to_label = {v: k for k, v in label_to_int.items()}
-
-    model = _build_mlp(input_dim, num_classes, hidden_sizes, dropout, lr)
-
-    # Build callbacks from config
-    early_cfg = config.get('callbacks', {}).get('early_stopping', {})
-    callbacks: List[tf.keras.callbacks.Callback] = []
-    if early_cfg.get('enabled', True):
-        callbacks.append(
-            tf.keras.callbacks.EarlyStopping(
-                monitor=early_cfg.get('monitor', 'val_loss'),
-                patience=early_cfg.get('patience', 10),
-                restore_best_weights=early_cfg.get('restore_best_weights', True),
-                min_delta=early_cfg.get('min_delta', 0.0),
-                verbose=1,
-            )
-        )
-
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=max_epochs,
-        callbacks=callbacks,
-        verbose=1,
-    )
-
-    test_eval = model.evaluate(test_ds, verbose=0, return_dict=True)
-    test_probs = model.predict(test_ds, verbose=0)
-    y_pred = np.argmax(test_probs, axis=1)
-
-    macro_f1 = macro_f1_score(y_true=y_test, y_pred=y_pred, num_classes=num_classes)
-    per_class_f1 = per_class_f1_scores(y_true=y_test, y_pred=y_pred, num_classes=num_classes)
-    
-    # Compute confusion matrix
-    from sklearn.metrics import confusion_matrix
-    conf_matrix = confusion_matrix(y_test, y_pred, labels=list(range(num_classes)))
-
-    # Extract hyperparameters summary for saving
-    early_cfg = config.get('callbacks', {}).get('early_stopping', {})
-    reduce_lr_cfg = config.get('callbacks', {}).get('reduce_lr_on_plateau', {})
-    hyperparameters = {
-        'batch_size': batch_size,
-        'hidden_sizes': list(hidden_sizes),
-        'dropout': dropout,
-        'learning_rate': lr,
-        'max_epochs': max_epochs,
-        'val_ratio': val_ratio,
-        'test_ratio': test_ratio,
-        'stratified': stratified,
-        'selected_angles': config.get('dataset', {}).get('selected_angles', ['all']),
-        'early_stopping': {
-            'enabled': early_cfg.get('enabled', True),
-            'monitor': early_cfg.get('monitor', 'val_loss'),
-            'patience': early_cfg.get('patience', 10),
-            'min_delta': early_cfg.get('min_delta', 0.0),
-        },
-        'reduce_lr_on_plateau': {
-            'enabled': reduce_lr_cfg.get('enabled', False),
-            'monitor': reduce_lr_cfg.get('monitor', 'val_loss'),
-            'factor': reduce_lr_cfg.get('factor', 0.5),
-            'patience': reduce_lr_cfg.get('patience', 15),
-            'min_lr': reduce_lr_cfg.get('min_lr', 1e-7),
-        },
-        'input_dim': input_dim,
-        'num_classes': num_classes,
-    }
-
-    results = {
-        'run_idx': run_idx,
-        'seed': seed,
-        'hyperparameters': hyperparameters,
-        'pose_summary': pose_summary,
-        'label_to_int': label_to_int,
-        'int_to_label': int_to_label,
-        'history': history.history,
-        'test_metrics': {
-            'loss': float(test_eval['loss']),
-            'accuracy': float(test_eval.get('accuracy', 0.0)),
-            'macro_f1': macro_f1,
-            'per_class_f1': {int(k): float(v) for k, v in per_class_f1.items()},
-            'confusion_matrix': conf_matrix.tolist(),
-        },
-        'train_sizes': {
-            'train': len(train_samples),
-            'val': len(val_samples),
-            'test': len(test_samples),
-        },
-        'y_test': y_test.tolist(),
-        'y_pred': y_pred.tolist(),
-    }
-
-    # Save results to disk
-    if config['results'].get('save_metrics', True):
-        metrics_path = os.path.join(results_folder, 'metrics.json')
-        with open(metrics_path, 'w') as f:
-            json.dump(results, f, indent=2)
-    
-    # Save model in .keras format
-    if config['results'].get('save_model', True):
-        model_path = os.path.join(results_folder, 'model.keras')
-        model.save(model_path)
-        logger.info("Model saved to: %s", model_path)
-    
-    return results
-
-
 def _compute_aggregation_stats_exp6(all_run_results: List[Dict]) -> Dict:
     """Calculate mean/std/min/max statistics across multiple training runs.
 
@@ -371,6 +134,11 @@ def _compute_aggregation_stats_exp6(all_run_results: List[Dict]) -> Dict:
         class_idx: [run['test_metrics']['per_class_f1'][class_idx] for run in all_run_results]
         for class_idx in range(num_classes)
     }
+    
+    # Find best run (by macro F1)
+    best_run_idx = max(range(len(all_run_results)), 
+                      key=lambda i: all_run_results[i]['test_metrics']['macro_f1'])
+    best_run = all_run_results[best_run_idx]
 
     aggregated_stats = {
         'test_accuracy': {
@@ -397,6 +165,14 @@ def _compute_aggregation_stats_exp6(all_run_results: List[Dict]) -> Dict:
             for class_idx, f1_scores in per_class_f1_all_runs.items()
         },
         'num_runs': len(all_run_results),
+        'best_run': {
+            'run_index': best_run_idx,
+            'run_number': best_run_idx + 1,  # 1-indexed for user display
+            'model_path': f'run_{best_run_idx + 1:03d}/model.keras',
+            'test_accuracy': float(best_run['test_metrics']['accuracy']),
+            'test_macro_f1': float(best_run['test_metrics']['macro_f1']),
+            'seed': int(best_run['seed']),
+        },
     }
 
     return aggregated_stats
@@ -427,13 +203,26 @@ def _save_multi_run_summary_exp6(
         f.write("=" * 80 + "\n\n")
         f.write(f"Number of runs: {aggregated_stats['num_runs']}\n\n")
         
-        f.write("TEST ACCURACY:\n")
+        # Find best run (by macro F1)
+        best_run_idx = max(range(len(all_run_results)), 
+                          key=lambda i: all_run_results[i]['test_metrics']['macro_f1'])
+        best_run = all_run_results[best_run_idx]
+        best_run_number = best_run_idx + 1  # 1-indexed for user display
+        
+        f.write("BEST RUN:\n")
+        f.write(f"  Run number: {best_run_number}\n")
+        f.write(f"  Run index: {best_run_idx}\n")
+        f.write(f"  Model path: run_{best_run_number:03d}/model.keras\n")
+        f.write(f"  Test Accuracy: {best_run['test_metrics']['accuracy']:.4f}\n")
+        f.write(f"  Test Macro F1: {best_run['test_metrics']['macro_f1']:.4f}\n\n")
+        
+        f.write("TEST ACCURACY (across all runs):\n")
         f.write(f"  Mean: {aggregated_stats['test_accuracy']['mean']:.4f}\n")
         f.write(f"  Std:  {aggregated_stats['test_accuracy']['std']:.4f}\n")
         f.write(f"  Min:  {aggregated_stats['test_accuracy']['min']:.4f}\n")
         f.write(f"  Max:  {aggregated_stats['test_accuracy']['max']:.4f}\n\n")
         
-        f.write("TEST MACRO F1:\n")
+        f.write("TEST MACRO F1 (across all runs):\n")
         f.write(f"  Mean: {aggregated_stats['test_macro_f1']['mean']:.4f}\n")
         f.write(f"  Std:  {aggregated_stats['test_macro_f1']['std']:.4f}\n")
         f.write(f"  Min:  {aggregated_stats['test_macro_f1']['min']:.4f}\n")
@@ -455,202 +244,76 @@ def _save_multi_run_summary_exp6(
         json.dump(all_run_results, f, indent=2)
 
 
-def train_experiment_6_multi_run(
-    npz_path: str,
-    config_path: str = 'config/experiment_6.yaml'
-) -> Tuple[List[Dict], Dict]:
-    """Execute multiple training runs with different seeds and aggregate results.
-
-    Args:
-        npz_path (str): Path to pose static NPZ file (front or side view).
-        config_path (str): Path to YAML configuration file.
-
-    Returns:
-        Tuple[List[Dict], Dict]: (all_run_results, aggregated_stats) containing individual
-            run metrics and aggregated statistics across all runs.
-    """
-    config = load_config(config_path)
+def _flatten_temporal_features(dataset: List[Tuple], selected_features: Optional[List[str]] = None, all_feature_names: Optional[List[str]] = None) -> List[Tuple]:
+    """Flatten temporal features for MLP input, optionally selecting specific features.
     
-    # Validate multi-run is enabled
-    multi_run_cfg = config.get('multi_run', {})
-    if not multi_run_cfg.get('enabled', False):
-        raise ValueError(
-            "Multi-run mode is disabled in config. Set 'multi_run.enabled: true' "
-            "or use train_experiment_6_static() for single runs."
-        )
-    
-    num_runs = multi_run_cfg.get('num_runs', 30)
-    base_seed = multi_run_cfg.get('base_seed', 42)
-    save_all_runs = multi_run_cfg.get('save_all_runs', True)
-    
-    # Create multi-run folder inside base_dir
-    base_results_dir = config['results']['base_dir']
-    
-    # Ensure base_results_dir exists
-    os.makedirs(base_results_dir, exist_ok=True)
-    
-    # Find next available multi_run folder inside base_dir
-    multi_run_idx = 1
-    while True:
-        multi_run_folder = os.path.join(base_results_dir, f'multi_run_{multi_run_idx:03d}')
-        if not os.path.exists(multi_run_folder):
-            break
-        multi_run_idx += 1
-    
-    os.makedirs(multi_run_folder, exist_ok=True)
-    logger.info("Multi-run parent folder: %s", multi_run_folder)
-    
-    # Save config to multi-run folder
-    config_copy_path = os.path.join(multi_run_folder, 'config.yaml')
-    import shutil
-    shutil.copy(config_path, config_copy_path)
-    
-    all_run_results = []
-    
-    for run_number in range(1, num_runs + 1):
-        run_seed = base_seed + run_number
-        logger.info("\n" + "=" * 80)
-        logger.info("Starting run %d/%d (seed=%d)", run_number, num_runs, run_seed)
-        logger.info("=" * 80)
-        
-        # Create individual run folder
-        run_folder = os.path.join(multi_run_folder, f'run_{run_number:03d}')
-        os.makedirs(run_folder, exist_ok=True)
-        
-        # Train with current seed
-        run_results = train_experiment_6_static(
-            npz_path=npz_path,
-            config_path=config_path,
-            results_folder=run_folder,
-            run_idx=run_number,
-            seed=run_seed,
-        )
-        
-        all_run_results.append(run_results)
-        
-        logger.info(
-            "Run %d complete: acc=%.4f, macro_f1=%.4f",
-            run_number,
-            run_results['test_metrics']['accuracy'],
-            run_results['test_metrics']['macro_f1'],
-        )
-        
-        # Memory cleanup
-        if config['memory'].get('clear_session_after_run', True):
-            tf.keras.backend.clear_session()
-        if config['memory'].get('force_gc_after_run', True):
-            gc.collect()
-    
-    # Compute aggregated statistics
-    aggregated_stats = _compute_aggregation_stats_exp6(all_run_results)
-    
-    # Save multi-run summary
-    _save_multi_run_summary_exp6(all_run_results, aggregated_stats, multi_run_folder)
-    
-    logger.info("\n" + "=" * 80)
-    logger.info("MULTI-RUN EXPERIMENT 6 COMPLETE")
-    logger.info("=" * 80)
-    logger.info("Test Accuracy: %.4f ± %.4f", 
-                aggregated_stats['test_accuracy']['mean'],
-                aggregated_stats['test_accuracy']['std'])
-    logger.info("Test Macro F1: %.4f ± %.4f",
-                aggregated_stats['test_macro_f1']['mean'],
-                aggregated_stats['test_macro_f1']['std'])
-    logger.info("=" * 80)
-    
-    return all_run_results, aggregated_stats
-
-
-__all__ = ['train_experiment_6_static', 'train_experiment_6_multi_run', 
-           'train_experiment_6_temporal', 'train_experiment_6_temporal_multi_run']
-
-
-# ============================================================================
-# TEMPORAL POSE TRAINING FUNCTIONS
-# ============================================================================
-
-
-def _filter_temporal_features(
-    dataset: List[Tuple], 
-    selected_angles: List[str], 
-    all_angle_names: List[str]
-) -> List[Tuple]:
-    """Filter temporal pose features to include only selected angles, then flatten.
-    
-    This function selects entire timestep sequences for specific angles, then flattens
-    the 2D temporal data (T_fixed, num_selected_angles) into 1D vectors for MLP input.
+    This unified function replaces both _flatten_enhanced_features() and 
+    _filter_temporal_features(), consolidating the flattening logic in one place.
     
     Args:
-        dataset (List[Tuple]): Dataset with (label, temporal_features, subject_id, view) tuples.
-            temporal_features has shape (T_fixed, num_angles), e.g., (50, 9).
-        selected_angles (List[str]): List of angle names to keep (e.g., ['left_elbow', 'right_knee']).
-        all_angle_names (List[str]): Complete list of angle names from NPZ file.
+        dataset (List[Tuple]): Dataset with (label, features, subject_id, [view]) tuples
+            where features has shape (T, num_features).
+        selected_features (Optional[List[str]]): Feature names to keep. If None or ['all'],
+            uses all features.
+        all_feature_names (Optional[List[str]]): Complete list of feature names from NPZ file.
+            Required if selected_features specifies specific features.
     
     Returns:
-        List[Tuple]: Filtered dataset with flattened features.
-            Features are reshaped from (T_fixed, num_selected_angles) to (T_fixed * num_selected_angles,).
+        List[Tuple]: Dataset with flattened features (T * num_selected_features,).
     """
-    if not selected_angles or selected_angles == ['all']:
-        # Use all angles, just flatten
-        filtered_dataset = []
-        for item in dataset:
-            if len(item) == 4:
-                label, features, subject_id, view = item
-                # Flatten from (T_fixed, num_angles) to (T_fixed * num_angles,)
-                flattened_features = features.flatten()
-                filtered_dataset.append((label, flattened_features, subject_id, view))
+    # Determine which feature indices to use
+    if selected_features and selected_features != ['all'] and all_feature_names:
+        feature_indices = []
+        for name in selected_features:
+            if name in all_feature_names:
+                feature_indices.append(all_feature_names.index(name))
             else:
-                label, features, subject_id = item
-                flattened_features = features.flatten()
-                filtered_dataset.append((label, flattened_features, subject_id))
-        
-        return filtered_dataset
+                logger.warning(f"Feature '{name}' not found. Available: {all_feature_names}")
+        if not feature_indices:
+            raise ValueError(f"No valid features selected. Available: {all_feature_names}")
+    else:
+        feature_indices = None  # Use all features
     
-    # Find indices of selected angles
-    angle_indices = []
-    for angle_name in selected_angles:
-        if angle_name in all_angle_names:
-            angle_indices.append(all_angle_names.index(angle_name))
-        else:
-            logger.warning(f"Angle '{angle_name}' not found in dataset. Available: {all_angle_names}")
-    
-    if not angle_indices:
-        raise ValueError(f"No valid angles selected. Available angles: {all_angle_names}")
-    
-    # Filter temporal sequences for selected angles
-    filtered_dataset = []
+    flattened = []
     for item in dataset:
         if len(item) == 4:
             label, features, subject_id, view = item
-            # Select columns for chosen angles: (T_fixed, num_angles) -> (T_fixed, num_selected)
-            filtered_features = features[:, angle_indices]
-            # Flatten to 1D vector for MLP: (T_fixed, num_selected) -> (T_fixed * num_selected,)
-            flattened_features = filtered_features.flatten()
-            filtered_dataset.append((label, flattened_features, subject_id, view))
         else:
             label, features, subject_id = item
-            filtered_features = features[:, angle_indices]
-            flattened_features = filtered_features.flatten()
-            filtered_dataset.append((label, flattened_features, subject_id))
+            view = None
+        
+        # Select features if indices specified
+        if feature_indices is not None:
+            features = features[:, feature_indices]
+        
+        # Flatten from (T, num_features) to (T * num_features,)
+        flat_features = features.flatten().astype(np.float32)
+        
+        if view is not None:
+            flattened.append((label, flat_features, subject_id, view))
+        else:
+            flattened.append((label, flat_features, subject_id))
     
-    logger.info(
-        "Filtered temporal features: %d angles selected (%s) -> shape %s -> %d flattened features",
-        len(angle_indices),
-        ', '.join([all_angle_names[i] for i in angle_indices]),
-        filtered_features.shape,
-        flattened_features.shape[0]
-    )
-    
-    return filtered_dataset
+    return flattened
 
 
-def train_experiment_6_temporal(
+__all__ = [
+    'train_experiment_6',
+    'train_experiment_6_multi_run',
+]
+
+
+# ============================================================================
+# TRAINING FUNCTIONS
+# ============================================================================
+
+
+def train_experiment_6(
     npz_path: str,
     config_path: str = 'config/experiment_6_temporal.yaml',
     *,
     results_folder: Optional[str] = None,
     run_idx: Optional[int] = None,
-    # Legacy parameters for backward compatibility
     val_ratio: Optional[float] = None,
     test_ratio: Optional[float] = None,
     seed: Optional[int] = None,
@@ -661,18 +324,16 @@ def train_experiment_6_temporal(
     stratified: Optional[bool] = None,
     max_epochs: Optional[int] = None,
 ) -> Dict:
-    """Train a pose-based MLP baseline with subject-wise stratified splits using temporal features.
+    """Train a pose-based MLP with subject-wise stratified splits using enhanced pose features.
     
-    Temporal features are flattened from (T_fixed, num_angles) to 1D vectors before feeding to MLP.
-    This establishes a baseline for comparing raw temporal sequences vs hand-crafted statistics.
+    Enhanced features (19 per timestep: 13 joint angles + 6 pairwise distances) are flattened
+    from (T_fixed, num_features) to 1D vectors before feeding to MLP.
 
     Args:
-        npz_path (str): Path to pose temporal NPZ file (front or side view).
-        config_path (str): Path to YAML configuration file. Defaults to 'config/experiment_6_temporal.yaml'.
+        npz_path (str): Path to enhanced pose NPZ file (front or side view).
+        config_path (str): Path to YAML configuration file.
         results_folder (Optional[str]): Pre-created results folder path (used in multi-run mode).
         run_idx (Optional[int]): Run index for naming (used in multi-run mode).
-        
-        Legacy parameters (overridden by config if None):
         val_ratio (Optional[float]): Fraction of subjects for validation split.
         test_ratio (Optional[float]): Fraction of subjects for test split.
         seed (Optional[int]): Random seed for reproducibility.
@@ -701,6 +362,10 @@ def train_experiment_6_temporal(
     stratified = stratified if stratified is not None else config['dataset']['stratified']
     max_epochs = max_epochs if max_epochs is not None else config['training']['max_epochs']
     
+    # Get feature configuration
+    feature_type = config.get('dataset', {}).get('feature_type', 'all')
+    selected_features = config.get('dataset', {}).get('selected_features', ['all'])
+    
     # Setup results folder if not provided (single-run mode)
     if results_folder is None:
         base_results_dir = config['results']['base_dir']
@@ -709,22 +374,21 @@ def train_experiment_6_temporal(
     
     set_global_seed(seed)
 
-    # Load temporal data
-    dataset, pose_summary = load_pose_temporal_data(npz_path)
+    # Load data using enhanced loader with feature_type selection
+    dataset, pose_summary = load_pose_enhanced_data(npz_path, feature_type=feature_type)
     
-    # Filter and flatten temporal features based on selected angles
-    selected_angles = config.get('dataset', {}).get('selected_angles', ['all'])
-    if selected_angles and selected_angles != ['all']:
-        if 'angle_names' not in pose_summary:
-            raise KeyError(
-                "NPZ file is missing 'angle_names' field but config specifies selected_angles. "
-                "Please regenerate the NPZ file or set selected_angles to ['all']."
-            )
-        angle_names = pose_summary['angle_names']
-        dataset = _filter_temporal_features(dataset, selected_angles, angle_names)
-    else:
-        # Flatten all temporal features
-        dataset = _filter_temporal_features(dataset, ['all'], pose_summary['angle_names'])
+    # Get feature names for optional fine-grained selection
+    feature_names = pose_summary.get('feature_names', None)
+    
+    logger.info(
+        "Loaded %s features: %s samples, shape %s",
+        feature_type,
+        pose_summary['count'],
+        pose_summary['temporal_shape']
+    )
+    
+    # Flatten temporal features, optionally selecting specific features by name
+    dataset = _flatten_temporal_features(dataset, selected_features, feature_names)
 
     train_samples, val_samples, test_samples, label_to_int = make_pose_split_three_way(
         dataset,
@@ -782,7 +446,8 @@ def train_experiment_6_temporal(
         'val_ratio': val_ratio,
         'test_ratio': test_ratio,
         'stratified': stratified,
-        'selected_angles': config.get('dataset', {}).get('selected_angles', ['all']),
+        'feature_type': feature_type,
+        'selected_features': selected_features,
         'early_stopping': {
             'enabled': early_cfg.get('enabled', True),
             'monitor': early_cfg.get('monitor', 'val_loss'),
@@ -798,7 +463,6 @@ def train_experiment_6_temporal(
         },
         'input_dim': input_dim,
         'num_classes': num_classes,
-        'feature_type': 'temporal_flattened',
     }
 
     results = {
@@ -840,14 +504,14 @@ def train_experiment_6_temporal(
     return results
 
 
-def train_experiment_6_temporal_multi_run(
+def train_experiment_6_multi_run(
     npz_path: str,
     config_path: str = 'config/experiment_6_temporal.yaml'
 ) -> Tuple[List[Dict], Dict]:
-    """Execute multiple temporal training runs with different seeds and aggregate results.
+    """Execute multiple training runs with different seeds and aggregate results.
 
     Args:
-        npz_path (str): Path to pose temporal NPZ file (front or side view).
+        npz_path (str): Path to enhanced pose NPZ file (front or side view).
         config_path (str): Path to YAML configuration file.
 
     Returns:
@@ -861,7 +525,7 @@ def train_experiment_6_temporal_multi_run(
     if not multi_run_cfg.get('enabled', False):
         raise ValueError(
             "Multi-run mode is disabled in config. Set 'multi_run.enabled: true' "
-            "or use train_experiment_6_temporal() for single runs."
+            "or use train_experiment_6() for single runs."
         )
     
     num_runs = multi_run_cfg.get('num_runs', 30)
@@ -903,7 +567,7 @@ def train_experiment_6_temporal_multi_run(
         os.makedirs(run_folder, exist_ok=True)
         
         # Train with current seed
-        run_results = train_experiment_6_temporal(
+        run_results = train_experiment_6(
             npz_path=npz_path,
             config_path=config_path,
             results_folder=run_folder,
@@ -933,7 +597,7 @@ def train_experiment_6_temporal_multi_run(
     _save_multi_run_summary_exp6(all_run_results, aggregated_stats, multi_run_folder)
     
     logger.info("\n" + "=" * 80)
-    logger.info("MULTI-RUN EXPERIMENT 6 (TEMPORAL) COMPLETE")
+    logger.info("MULTI-RUN EXPERIMENT 6 COMPLETE")
     logger.info("=" * 80)
     logger.info("Test Accuracy: %.4f ± %.4f", 
                 aggregated_stats['test_accuracy']['mean'],
@@ -944,4 +608,9 @@ def train_experiment_6_temporal_multi_run(
     logger.info("=" * 80)
     
     return all_run_results, aggregated_stats
+
+
+# Backward-compatible aliases
+train_experiment_6_temporal = train_experiment_6
+train_experiment_6_temporal_multi_run = train_experiment_6_multi_run
 
