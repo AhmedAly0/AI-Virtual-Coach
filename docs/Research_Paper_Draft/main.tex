@@ -58,10 +58,11 @@ walid.gomaa@ejust.edu.eg}
 
 \begin{abstract}
 We present an AI Virtual Coach composed of two main models: (i) Exercise Recognition, and (ii) Exercise Assessment.
+The recognition module employs a systematic feature engineering approach, evolving from 19 base biomechanical features (joint angles and distances) to 37 view-specific specialized features designed to resolve persistent confusion clusters identified through multi-run experiments.
 The assessment module performs aspect-level scoring for 15 resistance-training exercises using temporal pose sequences extracted from RGB video via MediaPipe, repetition segmentation, and a compact temporal CNN regressor.
-We evaluate on a small dataset of 51 volunteers (10 female, 41 male), captured simultaneously in front and side views using mobile phones.
-Each exercise includes 6--13 volunteers (after alignment), and each volunteer is rated on five aspects (0--10) by two coaches.
-We use a reliability-weighted label, a subject-disjoint protocol, and 10 randomized runs per exercise per view with best-checkpoint selection.
+We evaluate on a dataset of 51 volunteers (10 female, 41 male), captured simultaneously in front and side views using mobile phones.
+Our 37-feature representation achieves 90.36\% macro F1 on side view and 86.94\% macro F1 on front view, with robust performance across all 15 exercise classes.
+We use a subject-disjoint protocol and 30 randomized runs to ensure robust evaluation.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -81,9 +82,9 @@ Our central research question is: \emph{Can explicit repetition modeling (segmen
 
 \textbf{Contributions.} We contribute:
 \begin{itemize}
-  \item A practical modular virtual-coach pipeline (exercise recognition, assessment, coaching agent).
-  \item A pose-based assessment method that segments repetitions, aggregates multiple reps per volunteer, and predicts five aspect scores on a 0--10 scale.
-  \item A subject-disjoint multi-run evaluation protocol for small datasets, saving the best model per exercise and view.
+  \item A 37-dimensional view-specific feature representation combining biomechanical joint angles with specialized discrimination features targeting exercise-specific confusion patterns (curl grip, hinge dynamics, arm extension depth, elevation detection).
+  \item A practical modular virtual-coach pipeline integrating exercise recognition, per-repetition assessment, and LLM-based coaching feedback.
+  \item A subject-disjoint multi-run evaluation protocol (30 runs) achieving 90.36\% macro F1 (side) and 86.94\% macro F1 (front) for 15-class exercise recognition.
 \end{itemize}
 
 \textbf{Data and Code Availability.} The code for this work is publicly available at \url{https://github.com/AhmedAly0/AI-Virtual-Coach}.
@@ -228,7 +229,7 @@ The per-rep assessment scores, along with exercise-specific evaluation criteria,
 
 \draw[arrow] (rgb) -- node[annot, above]{frames} (mp);
 \draw[arrow] (mp) -- node[annot, above]{33 lm} (norm);
-\draw[arrow] (norm) -- node[annot, above]{(50,9)} (mlp);
+\draw[arrow] (norm) -- node[annot, above]{(50,37)} (mlp);
 \draw[dashedarrow] (mlp) -- node[annot, above]{route} (rep);
 \draw[arrow] (rep) -- node[annot, above]{$N$} (cnn);
 \draw[arrow] (cnn) -- (score);
@@ -265,7 +266,7 @@ The per-rep assessment scores, along with exercise-specific evaluation criteria,
 \node[stage, below=1mm of agent] {Stage 4: Coaching Agent};
 
 \end{tikzpicture}
-\caption{End-to-end pipeline. Stage~1 extracts pose landmarks and joint angles. Stage~2 classifies the exercise (15 classes). Stage~3 segments repetitions and applies exercise-specific temporal CNN models for per-rep aspect scores. Stage~4 uses LangGraph with Gemini LLM for personalized feedback.}
+\caption{End-to-end pipeline. Stage~1 extracts pose landmarks and computes 37 biomechanical features (19 base + 18 view-specific specialized). Stage~2 classifies the exercise (15 classes). Stage~3 segments repetitions and applies exercise-specific temporal CNN models for per-rep aspect scores. Stage~4 uses LangGraph with Gemini LLM for personalized feedback.}
 \label{fig:pipeline}
 \end{figure*}
 
@@ -298,12 +299,53 @@ Finally, each landmark $\mathbf{h}_i$ was normalized as:
 \end{equation}
 Frames with invalid torso length ($L < 10^{-6}$) were discarded to ensure numerical stability.
 
-\subsubsection{Joint angle computation}
-From the normalized 3D landmarks, nine biomechanical joint angles were computed per frame using the 3D dot product formula. For each angle defined by a triplet of landmarks $(a, b, c)$ where $b$ is the joint vertex, the angle $\theta$ was calculated as:
+\subsection{Feature Engineering}
+\label{sec:feature_eng}
+
+A central contribution of this work is a systematic feature engineering approach that evolves from basic joint angles to specialized discrimination features targeting specific confusion patterns. Our methodology follows a data-driven iterative process: (i) establish baseline performance with fundamental biomechanical features, (ii) analyze confusion matrices to identify persistent misclassification clusters, and (iii) design targeted features grounded in exercise biomechanics to resolve each cluster.
+
+\subsubsection{Base Feature Set (19 Features)}
+The base feature set comprises 13 joint angles and 6 distance-based features, computed from normalized 3D landmarks.
+
+\textbf{Joint Angles (13 features).} For each angle defined by a triplet of landmarks $(a, b, c)$ where $b$ is the joint vertex, the angle $\theta$ was calculated using the 3D dot product formula:
 \begin{equation}
 \theta = \arccos\left(\frac{\mathbf{v}_1 \cdot \mathbf{v}_2}{\|\mathbf{v}_1\| \|\mathbf{v}_2\|}\right),
 \end{equation}
-where $\mathbf{v}_1 = \mathbf{h}_a - \mathbf{h}_b$ and $\mathbf{v}_2 = \mathbf{h}_c - \mathbf{h}_b$ are vectors in 3D space. The nine angles extracted were: left and right elbow (landmarks 11-13-15 and 12-14-16), left and right shoulder (13-11-23 and 14-12-24), left and right hip (11-23-25 and 12-24-26), left and right knee (23-25-27 and 24-26-28), and torso lean (computed from mid-shoulder and pelvis alignment).
+where $\mathbf{v}_1 = \mathbf{h}_a - \mathbf{h}_b$ and $\mathbf{v}_2 = \mathbf{h}_c - \mathbf{h}_b$. The 13 angles comprise: bilateral elbow flexion (shoulder$\rightarrow$elbow$\rightarrow$wrist), bilateral shoulder abduction (elbow$\rightarrow$shoulder$\rightarrow$hip), bilateral hip flexion (shoulder$\rightarrow$hip$\rightarrow$knee), bilateral knee flexion (hip$\rightarrow$knee$\rightarrow$ankle), bilateral ankle dorsiflexion (knee$\rightarrow$ankle$\rightarrow$heel), bilateral wrist angles (elbow$\rightarrow$wrist$\rightarrow$pinky), and torso lean from vertical.
+
+\textbf{Distance Features (6 features).} To capture spatial relationships not encoded by angles, we compute: (i) bilateral ear-to-shoulder vertical distance for detecting shoulder elevation (shrugs), (ii) bilateral wrist-to-shoulder Euclidean distance for arm extension, and (iii) bilateral elbow-to-hip distance for arm tuck position. These features address exercises where joint angles remain relatively constant but body segment positions change significantly.
+
+\subsubsection{View-Specific Specialized Features}
+A key insight from our experiments is that different camera angles capture different aspects of exercise movements. While the same 33 landmarks are extracted from both views, the discriminative information differs substantially. The front view captures arm width, bilateral symmetry, and depth-axis movements, while the side view better captures elbow flexion, torso lean, and sagittal-plane trajectories. This motivated the development of \emph{view-specific} specialized features.
+
+\subsubsection{Confusion-Driven Feature Design (Front View)}
+Analysis of aggregated confusion matrices from 30-run experiments on the front view revealed four persistent confusion clusters requiring targeted intervention:
+
+\textbf{Cluster 1: Curl Variants (30--35\% cross-prediction).} Hammer Curls, EZ-Bar Curls, and Seated Biceps Curls were frequently confused because their elbow flexion patterns are nearly identical. We designed 8 features targeting grip and arm position differences: (i) \emph{forearm supination} estimated from the hand plane normal ($\vec{n} = (\text{wrist}\rightarrow\text{index}) \times (\text{wrist}\rightarrow\text{thumb})$), distinguishing neutral grip (Hammer: $\sim$0°), angled grip (EZ-Bar: $\sim$30--45°), and full supination (Seated: $\sim$90°); (ii) \emph{upper arm vertical angle} capturing the inclined bench position in Seated Curls; (iii) \emph{inter-wrist distance} exploiting the fixed bar width in EZ-Bar Curls; and (iv) \emph{elbow-body distance} distinguishing tucked (EZ-Bar) versus flared (Hammer) elbow positions.
+
+\textbf{Cluster 2: Hinge Movements ($\sim$25\% cross-prediction).} Deadlift and Bent-Over Rows share similar bent-over postures but differ in movement dynamics. We designed 4 features: (i) \emph{shoulder-width ratio} (shoulder width / hip width), which increases during row movements due to scapular retraction; (ii) \emph{wrist-hip vertical distance}, capturing the bar rising pattern in deadlifts versus the arm-pulling pattern in rows; and (iii) \emph{hip-depth ratio} (hip height / knee height), which changes throughout deadlifts but remains constant in rows.
+
+\textbf{Cluster 3: Arm Extensions ($\sim$22\% cross-prediction).} Triceps Kickbacks and Rows both involve bent-over arm movements. We exploit the Z-axis (depth) difference: in kickbacks, the wrist moves \emph{posterior} to the hip ($z_{\text{wrist}} > z_{\text{hip}}$), while in rows the wrist remains beside the hip.
+
+\textbf{Cluster 4: Minimal Motion ($\sim$16\% cross-prediction).} Shrugs and Calf Raises both exhibit minimal joint angle changes, making them indistinguishable by angle-based features alone. We designed 4 elevation features: (i) \emph{heel elevation} (heel height relative to foot index) captures plantar flexion in calf raises, and (ii) \emph{shoulder-center Y-position} captures shoulder elevation in shrugs. This demonstrates that some exercises require \emph{positional} rather than \emph{angular} features.
+
+\subsubsection{Side-View Specialized Features}
+For the side view, baseline experiments achieved 89.26\% accuracy but revealed critical underperformance in Shrugs (F1 = 0.59) and Overhead Triceps Extension (F1 = 0.65). We designed 18 side-view-specific features organized into 5 groups:
+
+\textbf{Group 1: Vertical Displacement (4 features)} targets Shrugs versus Calf Raises using shoulder elevation, heel ground clearance, shoulder-hip Y ratio, and ear-shoulder compression.
+
+\textbf{Group 2: Overhead Arm Position (4 features)} targets Overhead Triceps Extension using elbow-above-shoulder distance, wrist-above-elbow distance, and upper arm/forearm angles from vertical.
+
+\textbf{Group 3: Sagittal Arm Trajectory (4 features)} captures front-to-back arm movement patterns for discriminating curls, presses, and raises.
+
+\textbf{Group 4: Hip Hinge Profile (4 features)} distinguishes Deadlift, Rows, and Kickbacks using torso angle from vertical, hip-ankle depth alignment, and shoulder-hip forward displacement.
+
+\textbf{Group 5: Postural Stability (2 features)} provides general context through stance width and center-of-mass height.
+
+A key design principle for side-view features is preferring Y-axis (vertical) measurements over Z-axis (depth), since the side camera angle captures vertical motion reliably but depth less accurately.
+
+\subsubsection{Final Feature Vectors}
+The complete feature engineering yields view-specific 37-dimensional vectors: 19 base features shared across views, plus 18 view-specific specialized features. For front view: base (19) + curl discrimination (8) + hinge (4) + kickback (2) + elevation (4) = 37. For side view: base (19) + vertical displacement (4) + overhead arm (4) + sagittal trajectory (4) + hip hinge (4) + stability (2) = 37.
 
 \subsubsection{Temporal feature representation}
 For each exercise repetition, the nine joint angle time series were resampled to a fixed temporal length of $T_{\text{fixed}} = 50$ frames using linear interpolation to enable batch processing and model training. Let $\theta_j^{(t)}$ denote the $j$-th angle at original time index $t \in [0, T_{\text{orig}}-1]$. We defined a normalized time axis $\tau \in [0, 1]$ and applied linear interpolation to obtain angle values at target time indices $\tau' \in [0, 1]$ uniformly spaced with $T_{\text{fixed}}$ points. This resampling process produced temporal feature tensors of shape $(N_{\text{reps}}, 50, 9)$, where $N_{\text{reps}}$ is the total number of repetitions across all volunteers and exercises.
@@ -318,10 +360,10 @@ All processed pose data, including temporal angle sequences and tempo metadata, 
  
 
 \subsection{Exercise Recognition}
-The exercise recognition module classifies 15 resistance training exercises from temporal pose sequences using a multilayer perceptron (MLP). This module processes the temporal features extracted as described in Section~III-B and performs subject-disjoint classification to ensure generalization to unseen individuals.
+The exercise recognition module classifies 15 resistance training exercises from temporal pose sequences using a multilayer perceptron (MLP). This module processes the temporal features extracted as described in Section~\ref{sec:pose_gen} and the specialized features described in Section~\ref{sec:feature_eng}, performing subject-disjoint classification to ensure generalization to unseen individuals.
 
 \subsubsection{Model architecture}
-The temporal pose sequences of shape $(N, 50, 9)$ were flattened into 450-dimensional feature vectors, where each vector represents the concatenated time series of nine joint angles over 50 timesteps. A feedforward neural network with three hidden layers was employed, with layer sizes of 384, 192, and 96 neurons respectively. Each hidden layer was followed by ReLU activation and dropout regularization with a dropout rate of 0.30 to prevent overfitting. The output layer consisted of 15 neurons with softmax activation for multi-class classification.
+The temporal pose sequences of shape $(N, 50, F)$ were flattened into $50F$-dimensional feature vectors, where $F=19$ for the base feature set or $F=37$ for the extended feature set with view-specific specialized features. Each vector represents the concatenated time series of biomechanical features over 50 timesteps. A feedforward neural network with three hidden layers was employed, with layer sizes of 512, 256, and 128 neurons respectively for the 37-feature configuration (or 384, 192, and 96 for the 19-feature baseline). Each hidden layer was followed by ReLU activation and dropout regularization with a dropout rate of 0.38 to prevent overfitting. The output layer consisted of 15 neurons with softmax activation for multi-class classification.
 
 \subsubsection{Training protocol}
 The model was trained using the Adam optimizer with a learning rate of $8 \times 10^{-5}$ and a batch size of 16. Training was conducted for a maximum of 200 epochs with early stopping monitoring validation loss, using a patience of 50 epochs and restoring the best weights upon convergence. Learning rate reduction on plateau was enabled with a factor of 0.5 and a patience of 15 epochs. The loss function was sparse categorical cross-entropy, and both accuracy and macro-averaged F1 score were monitored during training.
@@ -374,26 +416,31 @@ For exercise recognition, both accuracy and macro-averaged F1 score were monitor
 
 \FloatBarrier
 \subsection{Exercise Recognition Results}
-Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 30 runs for both front and side views on the temporal pose data. The side-view model achieved a mean test accuracy of $89.26\% \pm 2.64\%$ and a mean macro-averaged F1 score of $87.74\% \pm 2.88\%$, while the front-view model achieved $76.16\% \pm 4.57\%$ accuracy and $75.08\% \pm 5.07\%$ macro F1. The side view consistently outperformed the front view by approximately 13 percentage points, suggesting that lateral body profiles provide more discriminative pose features for distinguishing between exercises.
+
+Table~\ref{tab:exer_recog_results} summarizes the aggregated performance across 30 runs for both front and side views using our 37-feature representation. The side-view model achieved a mean test accuracy of $90.49\% \pm 2.93\%$ and macro F1 of $90.36\% \pm 2.92\%$, while the front-view model achieved $87.13\% \pm 3.42\%$ accuracy and $86.94\% \pm 3.55\%$ macro F1.
 
 \begin{table}[H]
 \centering
-\caption{Exercise Recognition Results (30 Runs per View)}
+\caption{Exercise Recognition Results (37 features, 30 runs)}
 \label{tab:exer_recog_results}
-\begin{tabular}{llcc}
+\begin{tabular}{lcc}
 \toprule
-\textbf{View} & \textbf{Metric} & \textbf{Mean $\pm$ Std} & \textbf{Range} \\
+\textbf{View} & \textbf{Accuracy (\%)} & \textbf{Macro F1 (\%)} \\
 \midrule
-\multirow{2}{*}{Side} & Accuracy (\%) & $89.26 \pm 2.64$ & $[83.78, 94.90]$ \\
- & Macro F1 (\%) & $87.74 \pm 2.88$ & $[81.16, 93.24]$ \\
-\midrule
-\multirow{2}{*}{Front} & Accuracy (\%) & $76.16 \pm 4.57$ & $[68.34, 86.38]$ \\
- & Macro F1 (\%) & $75.08 \pm 5.07$ & $[65.70, 86.34]$ \\
+Side & $90.49 \pm 2.93$ & $90.36 \pm 2.92$ \\
+Front & $87.13 \pm 3.42$ & $86.94 \pm 3.55$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Per-class F1 scores for the side view revealed strong performance across most exercises, with several classes achieving F1 scores above 0.95 (Deadlift: 0.962, Rows: 0.960, Seated Biceps Curls: 0.977, Triceps Kickbacks: 0.957, Weighted Squats: 0.955). Classes with lower performance included Overhead Triceps Extension (0.654) and Shrugs (0.590), likely due to subtle biomechanical differences that are difficult to capture from the side view alone. Figs.~\ref{fig:confusion_side} and~\ref{fig:confusion_front} present the aggregated normalized confusion matrices for side and front views respectively, averaged across all 30 runs. Both views show strong diagonal dominance, though the front view exhibits more inter-class confusion, particularly among curl variants and raises.
+The side view outperforms the front view by approximately 3.4 percentage points, as lateral body profiles provide clearer visibility of elbow flexion, torso lean, and sagittal-plane trajectories. The specialized features targeting view-specific confusion patterns---such as vertical displacement for distinguishing Shrugs from Calf Raises, and grip-related features for curl variants---enable robust discrimination across all 15 exercise classes.
+
+\subsubsection{Per-Class Analysis}
+\textbf{Side View:} Strong performance across most classes, with Deadlift (F1 = 0.97), Bulgarian Split Squat (0.96), Seated Biceps Curls (0.96), and Rows (0.95) achieving excellent recognition. The vertical displacement features successfully distinguish Shrugs (F1 = 0.79) from Calf Raises, while overhead arm position features enable robust Overhead Triceps Extension recognition (F1 = 0.92).
+
+\textbf{Front View:} Exercises with distinctive postures achieve near-perfect recognition: Dumbbell Shoulder Press (F1 = 0.99), Weighted Squats (0.99), and Incline Bench Press (0.97). The curl discrimination features successfully separate Seated Biceps Curls (F1 = 0.92) and EZ-Bar Curls (0.82) from other curl variants. Remaining challenges include Hammer Curls (F1 = 0.63), which share similar arm positions with other curl variants despite grip differences.
+
+Figs.~\ref{fig:confusion_side} and~\ref{fig:confusion_front} present the aggregated normalized confusion matrices for side and front views respectively, averaged across all 30 runs. Both views show strong diagonal dominance, confirming that the specialized features effectively resolve exercise-specific confusion patterns.
 
 \begin{figure}[H]
 \centering
@@ -450,22 +497,25 @@ Weighted Squats & $2.98 \pm 0.85$ & $3.10 \pm 1.58$ \\
 
 \FloatBarrier
 \subsection{Discussion}
-%% TODO: discuss small data effects (few test subjects), segmentation robustness, view differences.
-%% Mention that mean±std across runs helps show stability despite limited data.
+
+\subsubsection{Feature Engineering Effectiveness}
+The effectiveness of our 37-feature representation stems from targeting exercise-specific discrimination challenges. Different exercises require different feature types: angular features capture joint flexion patterns for most movements, positional features (vertical displacement) distinguish minimal-motion exercises like Shrugs from Calf Raises, depth features separate front-to-back movements (Kickbacks vs Rows), and grip-related features differentiate curl variants. This biomechanically-grounded approach enables robust recognition without complex model architectures.
+
+\subsubsection{View Complementarity}
+The side view achieves higher performance ($\sim$90\% F1) than the front view ($\sim$87\% F1), as lateral profiles provide clearer visibility of elbow flexion, torso lean, and sagittal-plane trajectories. However, front-view features capturing bilateral symmetry and depth-axis movements remain valuable for certain exercises. Future work could explore view fusion strategies.
+
+\subsubsection{Limitations}
+Several limitations affect generalization. First, the dataset is small (51 subjects), leading to high variance across random splits despite multi-run averaging. Second, the limited number of test subjects per exercise (6--13) makes per-class statistics sensitive to individual execution styles. Third, some specialized features (e.g., forearm supination) rely on hand landmark accuracy, which degrades under occlusion or fast motion.
 
 
 \section{Conclusion}
-%% TODO: 3–5 sentences summarizing your system + results.
+We presented an AI Virtual Coach system for resistance training that integrates exercise recognition, per-repetition quality assessment, and LLM-based coaching feedback. Our key contribution is a 37-dimensional view-specific feature representation that combines biomechanical joint angles with specialized discrimination features targeting exercise-specific confusion patterns. Using a subject-disjoint evaluation protocol with 30 randomized runs, we achieved 90.36\% macro F1 on side view and 86.94\% macro F1 on front view for 15-class exercise recognition. The assessment module achieves an overall MAE of approximately 3.5 on a 0--10 scale across both views, demonstrating that lightweight pose-based models can provide practical quality feedback from consumer smartphone video.
 
 \subsection{Limitations}
-%% TODO:
-%% - expand dataset, improve gender balance
-%% - per-aspect weighting by criticality
+Several factors limit the current system's generalizability. The dataset contains only 51 subjects with gender imbalance (80\% male), and the limited number of test subjects per exercise (6--13) leads to high variance in per-class statistics. Some specialized features rely on hand landmark accuracy, which degrades under occlusion or fast motion. Additionally, the assessment module predicts uniform weights across all five aspects, whereas certain aspects (e.g., joint alignment) may be more critical for injury prevention than others.
 
 \subsection{Future Work}
-%% TODO:
-%% - on-device optimization (TFLite / quantization)
-%% - consider SSL pretraining on unlabeled pose sequences
+Future directions include: (i) expanding the dataset with more diverse participants and additional exercises; (ii) exploring view fusion strategies to leverage complementary information from front and side cameras; (iii) on-device optimization via TensorFlow Lite and quantization for real-time mobile deployment; and (iv) self-supervised pretraining on unlabeled pose sequences to improve generalization with limited labeled data.
 
 
 \section*{Acknowledgment}

@@ -454,7 +454,62 @@ ALL_EXTENDED_FEATURE_NAMES = ALL_FEATURE_NAMES + SPECIALIZED_FEATURE_NAMES
 
 
 # =============================================================================
-# SPECIALIZED FEATURE COMPUTATION (Phase 2)
+# SIDE-VIEW SPECIALIZED FEATURE NAMES (Phase 2 - Side View Discrimination)
+# =============================================================================
+
+# Group 1: Vertical displacement features (4 features) - Shrugs vs Calf Raises
+SIDE_VERTICAL_FEATURE_NAMES = [
+    'shoulder_elevation_y',         # Shoulder center Y position
+    'heel_ground_clearance',        # Heel height above foot index
+    'shoulder_hip_y_ratio',         # Shoulder height / hip height ratio
+    'ear_shoulder_compression',     # Ear-to-shoulder vertical gap
+]
+
+# Group 2: Overhead arm position features (4 features) - Overhead Triceps Extension
+SIDE_OVERHEAD_FEATURE_NAMES = [
+    'elbow_above_shoulder',         # Elbow Y relative to shoulder Y
+    'wrist_above_elbow',            # Wrist Y relative to elbow Y
+    'upper_arm_vertical_angle_side', # Upper arm angle from vertical
+    'forearm_vertical_angle_side',  # Forearm angle from vertical
+]
+
+# Group 3: Sagittal arm trajectory features (4 features) - Curls, Presses
+SIDE_SAGITTAL_FEATURE_NAMES = [
+    'wrist_forward_of_shoulder',    # Wrist Z relative to shoulder Z
+    'elbow_forward_of_hip',         # Elbow Z relative to hip Z
+    'arm_reach_forward',            # Wrist forward of torso centerline
+    'elbow_tuck_side',              # Elbow proximity to torso (Z-axis)
+]
+
+# Group 4: Hip hinge profile features (4 features) - Deadlift/Rows/Kickbacks
+SIDE_HINGE_FEATURE_NAMES = [
+    'torso_angle_from_vertical',    # Torso lean angle
+    'hip_behind_ankle',             # Hip Z relative to ankle Z
+    'shoulder_forward_of_hip',      # Shoulder Z relative to hip Z
+    'knee_hip_alignment_z',         # Knee-hip Z alignment
+]
+
+# Group 5: Postural stability features (2 features) - General context
+SIDE_STABILITY_FEATURE_NAMES = [
+    'stance_width_normalized',      # Horizontal ankle distance
+    'center_of_mass_y',             # Approximate COM height
+]
+
+# Combined side-view specialized features (18 total: 4+4+4+4+2)
+SIDE_SPECIALIZED_FEATURE_NAMES = (
+    SIDE_VERTICAL_FEATURE_NAMES +
+    SIDE_OVERHEAD_FEATURE_NAMES +
+    SIDE_SAGITTAL_FEATURE_NAMES +
+    SIDE_HINGE_FEATURE_NAMES +
+    SIDE_STABILITY_FEATURE_NAMES
+)
+
+# Side-view full extended feature set (base 19 + side specialized 18 = 37 total)
+SIDE_ALL_EXTENDED_FEATURE_NAMES = ALL_FEATURE_NAMES + SIDE_SPECIALIZED_FEATURE_NAMES
+
+
+# =============================================================================
+# SPECIALIZED FEATURE COMPUTATION (Phase 2 - Front View)
 # =============================================================================
 
 def compute_curl_features(landmarks: np.ndarray) -> np.ndarray:
@@ -720,6 +775,323 @@ def compute_all_specialized_features(landmarks: np.ndarray) -> np.ndarray:
         X_specialized[n] = compute_specialized_features_sequence(landmarks[n])
     
     return X_specialized
+
+
+# =============================================================================
+# SIDE-VIEW SPECIALIZED FEATURE COMPUTATION (Phase 2 - Side View)
+# =============================================================================
+
+def compute_side_vertical_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute vertical displacement features for side-view discrimination.
+    
+    Targets: Shrugs vs Calf Raises vs stationary exercises.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (4,) vertical displacement features
+    """
+    # Get landmarks
+    left_shoulder = landmarks[LM_LEFT_SHOULDER]
+    right_shoulder = landmarks[LM_RIGHT_SHOULDER]
+    left_hip = landmarks[LM_LEFT_HIP]
+    right_hip = landmarks[LM_RIGHT_HIP]
+    left_ear = landmarks[LM_LEFT_EAR]
+    right_ear = landmarks[LM_RIGHT_EAR]
+    left_heel = landmarks[LM_LEFT_HEEL]
+    right_heel = landmarks[LM_RIGHT_HEEL]
+    left_foot_idx = landmarks[LM_LEFT_FOOT_INDEX]
+    right_foot_idx = landmarks[LM_RIGHT_FOOT_INDEX]
+    
+    # Feature 1: Shoulder center Y position
+    shoulder_elevation_y = (left_shoulder[1] + right_shoulder[1]) / 2
+    
+    # Feature 2: Heel ground clearance (plantar flexion indicator)
+    left_clearance = left_foot_idx[1] - left_heel[1]
+    right_clearance = right_foot_idx[1] - right_heel[1]
+    heel_ground_clearance = (left_clearance + right_clearance) / 2
+    
+    # Feature 3: Shoulder/hip Y ratio
+    hip_center_y = (left_hip[1] + right_hip[1]) / 2
+    if abs(hip_center_y) < 1e-6:
+        shoulder_hip_y_ratio = 1.0
+    else:
+        shoulder_hip_y_ratio = shoulder_elevation_y / hip_center_y
+    
+    # Feature 4: Ear-shoulder compression
+    left_ear_dist = left_ear[1] - left_shoulder[1]
+    right_ear_dist = right_ear[1] - right_shoulder[1]
+    ear_shoulder_compression = (left_ear_dist + right_ear_dist) / 2
+    
+    return np.array([
+        shoulder_elevation_y,
+        heel_ground_clearance,
+        shoulder_hip_y_ratio,
+        ear_shoulder_compression
+    ], dtype=np.float32)
+
+
+def compute_side_overhead_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute overhead arm position features for side-view discrimination.
+    
+    Targets: Overhead Triceps Extension vs other arm exercises.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (4,) overhead arm features
+    """
+    # Get landmarks
+    left_shoulder = landmarks[LM_LEFT_SHOULDER]
+    right_shoulder = landmarks[LM_RIGHT_SHOULDER]
+    left_elbow = landmarks[LM_LEFT_ELBOW]
+    right_elbow = landmarks[LM_RIGHT_ELBOW]
+    left_wrist = landmarks[LM_LEFT_WRIST]
+    right_wrist = landmarks[LM_RIGHT_WRIST]
+    
+    # Feature 1: Elbow above shoulder
+    left_elbow_diff = left_elbow[1] - left_shoulder[1]
+    right_elbow_diff = right_elbow[1] - right_shoulder[1]
+    elbow_above_shoulder = (left_elbow_diff + right_elbow_diff) / 2
+    
+    # Feature 2: Wrist above elbow
+    left_wrist_diff = left_wrist[1] - left_elbow[1]
+    right_wrist_diff = right_wrist[1] - right_elbow[1]
+    wrist_above_elbow = (left_wrist_diff + right_wrist_diff) / 2
+    
+    # Feature 3: Upper arm vertical angle (from sagittal plane)
+    left_upper_arm = left_elbow - left_shoulder
+    right_upper_arm = right_elbow - right_shoulder
+    avg_upper_arm = (left_upper_arm + right_upper_arm) / 2
+    vertical = np.array([0, 1, 0])
+    
+    norm = np.linalg.norm(avg_upper_arm)
+    if norm < 1e-6:
+        upper_arm_vertical_angle_side = 0.0
+    else:
+        cos_angle = np.dot(avg_upper_arm, vertical) / norm
+        upper_arm_vertical_angle_side = np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
+    
+    # Feature 4: Forearm vertical angle
+    left_forearm = left_wrist - left_elbow
+    right_forearm = right_wrist - right_elbow
+    avg_forearm = (left_forearm + right_forearm) / 2
+    
+    norm = np.linalg.norm(avg_forearm)
+    if norm < 1e-6:
+        forearm_vertical_angle_side = 0.0
+    else:
+        cos_angle = np.dot(avg_forearm, vertical) / norm
+        forearm_vertical_angle_side = np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
+    
+    return np.array([
+        elbow_above_shoulder,
+        wrist_above_elbow,
+        upper_arm_vertical_angle_side,
+        forearm_vertical_angle_side
+    ], dtype=np.float32)
+
+
+def compute_side_sagittal_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute sagittal plane arm trajectory features for side-view.
+    
+    Targets: Curls, pressing movements, front raises.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (4,) sagittal arm features
+    """
+    # Get landmarks
+    left_shoulder = landmarks[LM_LEFT_SHOULDER]
+    right_shoulder = landmarks[LM_RIGHT_SHOULDER]
+    left_elbow = landmarks[LM_LEFT_ELBOW]
+    right_elbow = landmarks[LM_RIGHT_ELBOW]
+    left_wrist = landmarks[LM_LEFT_WRIST]
+    right_wrist = landmarks[LM_RIGHT_WRIST]
+    left_hip = landmarks[LM_LEFT_HIP]
+    right_hip = landmarks[LM_RIGHT_HIP]
+    
+    # Feature 1: Wrist forward of shoulder (Z-axis)
+    # Note: In MediaPipe, smaller Z = closer to camera = more forward
+    left_wrist_forward = left_shoulder[2] - left_wrist[2]
+    right_wrist_forward = right_shoulder[2] - right_wrist[2]
+    wrist_forward_of_shoulder = (left_wrist_forward + right_wrist_forward) / 2
+    
+    # Feature 2: Elbow forward of hip
+    left_elbow_forward = left_hip[2] - left_elbow[2]
+    right_elbow_forward = right_hip[2] - right_elbow[2]
+    elbow_forward_of_hip = (left_elbow_forward + right_elbow_forward) / 2
+    
+    # Feature 3: Arm reach forward (wrist forward of torso centerline)
+    torso_z = (left_shoulder[2] + right_shoulder[2] + left_hip[2] + right_hip[2]) / 4
+    wrist_z = (left_wrist[2] + right_wrist[2]) / 2
+    arm_reach_forward = torso_z - wrist_z
+    
+    # Feature 4: Elbow tuck (how close elbows are to torso Z-axis)
+    left_tuck = abs(left_elbow[2] - left_hip[2])
+    right_tuck = abs(right_elbow[2] - right_hip[2])
+    elbow_tuck_side = (left_tuck + right_tuck) / 2
+    
+    return np.array([
+        wrist_forward_of_shoulder,
+        elbow_forward_of_hip,
+        arm_reach_forward,
+        elbow_tuck_side
+    ], dtype=np.float32)
+
+
+def compute_side_hinge_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute hip hinge profile features for side-view discrimination.
+    
+    Targets: Deadlift vs Rows vs Kickbacks.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (4,) hip hinge features
+    """
+    # Get landmarks
+    left_shoulder = landmarks[LM_LEFT_SHOULDER]
+    right_shoulder = landmarks[LM_RIGHT_SHOULDER]
+    left_hip = landmarks[LM_LEFT_HIP]
+    right_hip = landmarks[LM_RIGHT_HIP]
+    left_knee = landmarks[LM_LEFT_KNEE]
+    right_knee = landmarks[LM_RIGHT_KNEE]
+    left_ankle = landmarks[LM_LEFT_ANKLE]
+    right_ankle = landmarks[LM_RIGHT_ANKLE]
+    
+    # Feature 1: Torso angle from vertical
+    shoulder_center = (left_shoulder + right_shoulder) / 2
+    hip_center = (left_hip + right_hip) / 2
+    torso_vector = shoulder_center - hip_center
+    vertical = np.array([0, 1, 0])
+    
+    norm = np.linalg.norm(torso_vector)
+    if norm < 1e-6:
+        torso_angle_from_vertical = 0.0
+    else:
+        cos_angle = np.dot(torso_vector, vertical) / norm
+        torso_angle_from_vertical = np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
+    
+    # Feature 2: Hip behind ankle (Z-axis)
+    hip_z = (left_hip[2] + right_hip[2]) / 2
+    ankle_z = (left_ankle[2] + right_ankle[2]) / 2
+    hip_behind_ankle = hip_z - ankle_z
+    
+    # Feature 3: Shoulder forward of hip
+    shoulder_z = (left_shoulder[2] + right_shoulder[2]) / 2
+    shoulder_forward_of_hip = hip_z - shoulder_z
+    
+    # Feature 4: Knee-hip Z alignment
+    knee_z = (left_knee[2] + right_knee[2]) / 2
+    knee_hip_alignment_z = hip_z - knee_z
+    
+    return np.array([
+        torso_angle_from_vertical,
+        hip_behind_ankle,
+        shoulder_forward_of_hip,
+        knee_hip_alignment_z
+    ], dtype=np.float32)
+
+
+def compute_side_stability_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute postural stability features for side-view.
+    
+    Provides general body position context.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (2,) stability features
+    """
+    # Get landmarks
+    left_shoulder = landmarks[LM_LEFT_SHOULDER]
+    right_shoulder = landmarks[LM_RIGHT_SHOULDER]
+    left_hip = landmarks[LM_LEFT_HIP]
+    right_hip = landmarks[LM_RIGHT_HIP]
+    left_ankle = landmarks[LM_LEFT_ANKLE]
+    right_ankle = landmarks[LM_RIGHT_ANKLE]
+    
+    # Feature 1: Stance width (X-axis distance between ankles)
+    stance_width_normalized = abs(left_ankle[0] - right_ankle[0])
+    
+    # Feature 2: Approximate center of mass Y position
+    shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
+    hip_y = (left_hip[1] + right_hip[1]) / 2
+    center_of_mass_y = (shoulder_y + hip_y) / 2
+    
+    return np.array([
+        stance_width_normalized,
+        center_of_mass_y
+    ], dtype=np.float32)
+
+
+def compute_side_specialized_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute all side-view specialized features from a single frame.
+    
+    Args:
+        landmarks: Shape (33, 3) normalized landmark coordinates
+        
+    Returns:
+        np.ndarray: Shape (18,) all side-view specialized features
+    """
+    vertical_features = compute_side_vertical_features(landmarks)    # 4 features
+    overhead_features = compute_side_overhead_features(landmarks)    # 4 features
+    sagittal_features = compute_side_sagittal_features(landmarks)    # 4 features
+    hinge_features = compute_side_hinge_features(landmarks)          # 4 features
+    stability_features = compute_side_stability_features(landmarks)  # 2 features
+    
+    return np.concatenate([
+        vertical_features,
+        overhead_features,
+        sagittal_features,
+        hinge_features,
+        stability_features
+    ])
+
+
+def compute_side_specialized_features_sequence(landmarks: np.ndarray) -> np.ndarray:
+    """Compute side-view specialized features for a temporal sequence.
+    
+    Args:
+        landmarks: Shape (T, 33, 3) normalized landmark sequence
+        
+    Returns:
+        np.ndarray: Shape (T, 18) side-view specialized features per frame
+    """
+    T = landmarks.shape[0]
+    features = np.zeros((T, 18), dtype=np.float32)
+    
+    for t in range(T):
+        features[t] = compute_side_specialized_features(landmarks[t])
+    
+    return features
+
+
+def compute_all_side_specialized_features(landmarks: np.ndarray) -> np.ndarray:
+    """Compute side-view specialized features for a batch of landmark sequences.
+    
+    Args:
+        landmarks: Shape (N, T, 33, 3) batch of landmark sequences
+        
+    Returns:
+        np.ndarray: Shape (N, T, 18) side-view specialized features
+    """
+    N, T = landmarks.shape[0], landmarks.shape[1]
+    num_specialized = len(SIDE_SPECIALIZED_FEATURE_NAMES)
+    
+    X_side_specialized = np.zeros((N, T, num_specialized), dtype=np.float32)
+    
+    for n in range(N):
+        X_side_specialized[n] = compute_side_specialized_features_sequence(landmarks[n])
+    
+    return X_side_specialized
 
 
 def extract_features_from_video(video_path: str) -> Optional[Tuple[np.ndarray, int, float]]:

@@ -227,42 +227,114 @@ Designed to distinguish **Shrugs** from **Calf Raises**.
 
 ---
 
-## 6. Side View Specialized Features (Planned)
+## 6. Side View Specialized Features (18 Features)
 
-The side view model currently uses only the **base 19 features** and achieves ~84% accuracy. View-specific specialized features for the side view are planned for future development.
+### 6.1 Baseline Performance & Problem Analysis
 
-### 6.1 Potential Confusion Clusters (Side View)
+**Best Baseline:** multi_run_003 achieved **89.26% accuracy, 87.74% Macro F1** with 9 angles × 50 timesteps.
 
-Based on preliminary analysis, the side view may have different confusion patterns:
+**Critical Performance Issues:**
+- **Shrugs**: F1 = 0.59 ± 0.16 (confused with Calf Raises, Deadlift, Lateral Raises)
+- **Overhead Triceps Extension**: F1 = 0.65 ± 0.12 (confused with Inclined Bench Press, Lateral Raises)
 
-| Cluster | Potential Confusions | Rationale |
-|---------|---------------------|----------|
-| **Pressing Movements** | Shoulder Press ↔ Inclined Press | Similar arm trajectory from side |
-| **Hip Hinge Variants** | Deadlift ↔ Rows ↔ Kickbacks | Hip angle similar, arm movement differs |
-| **Standing Exercises** | Calf Raises ↔ Shrugs ↔ Curls | Minimal lower body movement |
+**Target Improvement:** Boost underperforming exercises to F1 ≥ 0.75 while maintaining overall performance.
 
-### 6.2 Planned Side View Features
+### 6.2 Side View Feature Groups (18 Features)
 
-Candidate features for side view discrimination (to be validated):
+The side-view specialized features are organized into 5 groups:
 
-| Feature Category | Potential Features | Purpose |
-|------------------|-------------------|--------|
-| **Arm Trajectory** | Wrist path angle, elbow extension rate | Distinguish press vs curl movements |
-| **Hip Mechanics** | Hip-knee-ankle alignment, torso angle | Better hinge movement discrimination |
-| **Depth Cues** | Shoulder protraction/retraction | Row vs press distinction |
+```
+SIDE-VIEW SPECIALIZED FEATURES (18 total)
+├── Group 1: Vertical Displacement (4 features)    → Targets: Shrugs vs Calf Raises
+├── Group 2: Overhead Arm Position (4 features)    → Targets: Overhead Triceps Extension
+├── Group 3: Sagittal Arm Trajectory (4 features)  → Targets: Curl variants, Presses
+├── Group 4: Hip Hinge Profile (4 features)        → Targets: Deadlift/Rows/Kickbacks
+└── Group 5: Postural Stability (2 features)       → Targets: General context
+```
 
-### 6.3 Feature Overlap Strategy
+### 6.3 Group 1: Vertical Displacement (4 Features)
 
-Some front view features may transfer well to side view:
+**Purpose:** Discriminate Shrugs from Calf Raises and other standing exercises.
 
-| Feature | Front View Utility | Side View Utility |
-|---------|-------------------|------------------|
-| `shoulder_width_ratio` | ✅ Rows detection | ⚠️ Less visible from side |
-| `wrist_hip_vertical` | ✅ Deadlift vs Rows | ✅ Likely useful |
-| `heel_elevation` | ✅ Calf raises | ✅ Likely useful |
-| `forearm_supination` | ✅ Curl variants | ❓ May not be visible |
+| # | Feature Name | Description | Biomechanical Rationale |
+|---|-------------|-------------|------------------------|
+| 1 | `shoulder_elevation_y` | Shoulder center vertical position | Shrugs: shoulders rise |
+| 2 | `heel_ground_clearance` | Heel height above foot index | Calf raises: heels rise |
+| 3 | `shoulder_hip_y_ratio` | Shoulder height / hip height | Torso elongation indicator |
+| 4 | `ear_shoulder_compression` | Ear-to-shoulder vertical gap | Shrugs: gap decreases |
 
-**Note:** Final side view features will be determined through experimentation and confusion matrix analysis.
+**Key Insight:**
+- **Shrugs**: `shoulder_elevation_y` increases, `ear_shoulder_compression` decreases, heels flat
+- **Calf Raises**: `heel_ground_clearance` increases, shoulders stable
+
+### 6.4 Group 2: Overhead Arm Position (4 Features)
+
+**Purpose:** Discriminate overhead movements (Triceps Extension vs Shoulder Press vs Lateral Raises).
+
+| # | Feature Name | Description | Biomechanical Rationale |
+|---|-------------|-------------|------------------------|
+| 5 | `elbow_above_shoulder` | Elbow Y relative to shoulder Y | Overhead exercises: elbows elevated |
+| 6 | `wrist_above_elbow` | Wrist Y relative to elbow Y | Triceps: wrist moves below elbow |
+| 7 | `upper_arm_vertical_angle_side` | Upper arm angle from vertical | Triceps: arms nearly vertical |
+| 8 | `forearm_vertical_angle_side` | Forearm angle from vertical | Tracks arm extension angle |
+
+**Key Insight:**
+- **Overhead Triceps Extension**: `elbow_above_shoulder` > 0, `wrist_above_elbow` varies (negative at bottom)
+- **Shoulder Press**: Both elbow and wrist above shoulder at top
+- **Lateral Raises**: Elbow roughly at shoulder height, arms horizontal
+
+### 6.5 Group 3: Sagittal Arm Trajectory (4 Features)
+
+**Purpose:** Discriminate arm movement patterns in the sagittal plane (front-to-back).
+
+| # | Feature Name | Description | Biomechanical Rationale |
+|---|-------------|-------------|------------------------|
+| 9 | `wrist_forward_of_shoulder` | Wrist Z relative to shoulder Z | Front raises: wrists forward |
+| 10 | `elbow_forward_of_hip` | Elbow Z relative to hip Z | Curl variants: elbow position |
+| 11 | `arm_reach_forward` | Wrist distance forward from torso | Measures arm extension |
+| 12 | `elbow_tuck_side` | Elbow proximity to torso (Z-axis) | Curls: elbows tucked |
+
+**Key Insight:**
+- **Rows**: Arms pull back (wrist behind shoulder)
+- **Curls**: Elbows tucked at sides, wrists forward
+- **Front Raises**: Wrists significantly forward of shoulders
+
+### 6.6 Group 4: Hip Hinge Profile (4 Features)
+
+**Purpose:** Discriminate hip hinge movements (Deadlift vs Rows vs Kickbacks).
+
+| # | Feature Name | Description | Biomechanical Rationale |
+|---|-------------|-------------|------------------------|
+| 13 | `torso_angle_from_vertical` | Torso lean angle | Deadlift: changes; Rows: constant |
+| 14 | `hip_behind_ankle` | Hip Z relative to ankle Z | Hip position in hinge |
+| 15 | `shoulder_forward_of_hip` | Shoulder Z relative to hip Z | Torso lean forward |
+| 16 | `knee_hip_alignment_z` | Knee-hip depth alignment | Squat vs hinge pattern |
+
+**Key Insight:**
+- **Deadlift**: `torso_angle_from_vertical` changes throughout (starts bent, ends upright)
+- **Rows**: `torso_angle_from_vertical` stays constant (~45°)
+- **Kickbacks**: Similar torso angle to rows, but different arm trajectory
+
+### 6.7 Group 5: Postural Stability (2 Features)
+
+**Purpose:** Provide context about overall body position.
+
+| # | Feature Name | Description | Biomechanical Rationale |
+|---|-------------|-------------|------------------------|
+| 17 | `stance_width_normalized` | Foot spread (X-axis) | Squat vs standing position |
+| 18 | `center_of_mass_y` | Approximate COM height | Overall body position |
+
+### 6.8 Design Considerations: Y-axis vs Z-axis
+
+**Why prefer Y-axis (vertical) over Z-axis (depth) for side view?**
+
+| Axis | Reliability from Side | Usage in Features |
+|------|----------------------|-------------------|
+| **Y (vertical)** | ✅ Excellent - gravity-aligned, stable | Primary for Groups 1, 2, 5 |
+| **Z (depth)** | ⚠️ Moderate - side camera angle | Secondary for Groups 3, 4 |
+| **X (lateral)** | ❌ Poor - perpendicular to camera | Minimal usage |
+
+The side view sees depth (Z) less reliably than vertical (Y), so features emphasize Y-axis measurements.
 
 ---
 
@@ -292,11 +364,11 @@ The feature vectors differ between views due to view-specific specialized featur
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Side View Feature Vector (19 Features - Current)
+### 7.2 Side View Feature Vector (37 Features)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              SIDE VIEW FEATURE VECTOR (19)                   │
+│              SIDE VIEW FEATURE VECTOR (37)                   │
 ├──────────────────────────────────────────────────────────────┤
 │  BASE FEATURES (19)                                          │
 │  ├── Joint Angles (13): elbow, shoulder, hip, knee,         │
@@ -304,8 +376,20 @@ The feature vectors differ between views due to view-specific specialized featur
 │  └── Distances (6): ear-shoulder, wrist-shoulder,           │
 │                     elbow-hip (×2 sides)                    │
 ├──────────────────────────────────────────────────────────────┤
-│  SIDE-SPECIFIC SPECIALIZED FEATURES (TBD)                    │
-│  └── To be developed based on side view confusion analysis  │
+│  SIDE-SPECIFIC SPECIALIZED FEATURES (18)                     │
+│  ├── Vertical Displacement (4): shoulder_elevation_y,       │
+│  │   heel_ground_clearance, shoulder_hip_y_ratio,          │
+│  │   ear_shoulder_compression                               │
+│  ├── Overhead Arm Position (4): elbow_above_shoulder,       │
+│  │   wrist_above_elbow, upper_arm_vertical_angle_side,     │
+│  │   forearm_vertical_angle_side                            │
+│  ├── Sagittal Arm Trajectory (4): wrist_forward_of_shoulder,│
+│  │   elbow_forward_of_hip, arm_reach_forward, elbow_tuck   │
+│  ├── Hip Hinge Profile (4): torso_angle_from_vertical,      │
+│  │   hip_behind_ankle, shoulder_forward_of_hip,            │
+│  │   knee_hip_alignment_z                                   │
+│  └── Postural Stability (2): stance_width_normalized,       │
+│      center_of_mass_y                                        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -316,8 +400,10 @@ The feature vectors differ between views due to view-specific specialized featur
 | `angles` | 13 | 13 | Joint angles only |
 | `distances` | 6 | 6 | Distance features only |
 | `all` | 19 | 19 | Base set (angles + distances) |
-| `specialized` | 18 | TBD | View-specific discrimination features |
-| `all_extended` | 37 | 19 (current) | Full feature set per view |
+| `front_specialized` | 18 | - | Front-view discrimination features |
+| `side_specialized` | - | 18 | Side-view discrimination features |
+| `front_all_extended` | 37 | - | Front: base + front specialized |
+| `side_all_extended` | - | 37 | Side: base + side specialized |
 
 ---
 
@@ -403,40 +489,44 @@ datasets/Mediapipe pose estimates/
 
 ### Available Feature Types in Data Loader
 
-| Feature Type | Features Loaded | Flattened Dimension |
-|--------------|-----------------|---------------------|
-| `'angles'` | 13 joint angles | 13 × 50 = 650 |
-| `'distances'` | 6 distance features | 6 × 50 = 300 |
-| `'all'` | 19 base features | 19 × 50 = 950 |
-| `'specialized'` | 18 discrimination features | 18 × 50 = 900 |
-| `'all_extended'` | 37 full features | 37 × 50 = 1,850 |
-| `'base_specialized'` | Same as `'all_extended'` | 37 × 50 = 1,850 |
+| Feature Type | View | Features Loaded | Flattened Dimension |
+|--------------|------|-----------------|---------------------|
+| `'angles'` | Both | 13 joint angles | 13 × 50 = 650 |
+| `'distances'` | Both | 6 distance features | 6 × 50 = 300 |
+| `'all'` | Both | 19 base features | 19 × 50 = 950 |
+| `'specialized'` | Front | 18 front-specific features | 18 × 50 = 900 |
+| `'front_specialized'` | Front | 18 front-specific features | 18 × 50 = 900 |
+| `'side_specialized'` | Side | 18 side-specific features | 18 × 50 = 900 |
+| `'all_extended'` | Front | 37 full features (19+18) | 37 × 50 = 1,850 |
+| `'front_all_extended'` | Front | 37 full features (19+18) | 37 × 50 = 1,850 |
+| `'side_all_extended'` | Side | 37 full features (19+18) | 37 × 50 = 1,850 |
+| `'base_specialized'` | Front | Same as `'all_extended'` | 37 × 50 = 1,850 |
 
 ### Loading Examples
 
 ```python
-from src.data.data_loader import load_pose_npz_temporal
+from src.data.data_loader import load_pose_enhanced_data
 
 # Load front view base features (19)
-X, y, subject_ids, meta = load_pose_npz_temporal(
-    npz_path='datasets/Mediapipe pose estimates/pose_data_front.npz',
+dataset, summary = load_pose_enhanced_data(
+    npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
     feature_type='all'
 )
-# X.shape: (N, 950)  # Flattened 19 × 50
+# X.shape: (N, 50, 19) temporal
 
 # Load front view full features (37)
-X, y, subject_ids, meta = load_pose_npz_temporal(
-    npz_path='datasets/Mediapipe pose estimates/pose_data_front.npz',
-    feature_type='all_extended'
+dataset, summary = load_pose_enhanced_data(
+    npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
+    feature_type='front_all_extended'
 )
-# X.shape: (N, 1850)  # Flattened 37 × 50
+# X.shape: (N, 50, 37) temporal
 
-# Load side view features (19 base, specialized TBD)
-X, y, subject_ids, meta = load_pose_npz_temporal(
-    npz_path='datasets/Mediapipe pose estimates/pose_data_side.npz',
-    feature_type='all'
+# Load side view full features (37 - with side-specific features)
+dataset, summary = load_pose_enhanced_data(
+    npz_path='datasets/Mediapipe pose estimates/pose_data_side_19_features.npz',
+    feature_type='side_all_extended'
 )
-# X.shape: (N, 950)  # Flattened 19 × 50
+# X.shape: (N, 50, 37) temporal
 ```
 
 ---
@@ -445,18 +535,29 @@ X, y, subject_ids, meta = load_pose_npz_temporal(
 
 ### Feature Engineering Evolution
 
-| Phase | Features | Key Addition |
-|-------|----------|--------------|
-| **Initial** | 9 angles | Core joint angles |
-| **Phase 1** | 19 (13 angles + 6 distances) | Ankle, wrist angles; ear-shoulder, arm distances |
-| **Phase 2** | 37 (19 base + 18 specialized) | Curl, hinge, kickback, elevation discrimination |
+| Phase | Features | Key Addition | View |
+|-------|----------|--------------|------|
+| **Initial** | 9 angles | Core joint angles | Both |
+| **Phase 1** | 19 (13 angles + 6 distances) | Ankle, wrist angles; arm distances | Both |
+| **Phase 2a** | 37 (19 base + 18 front specialized) | Curl, hinge, kickback, elevation discrimination | Front |
+| **Phase 2b** | 37 (19 base + 18 side specialized) | Vertical, overhead, sagittal, hinge, stability | Side |
 
 ### Key Design Principles
 
 1. **3D Coordinates**: Leverage MediaPipe's depth (z) for movements toward/away from camera
-2. **Normalization**: Pelvis-centered, torso-length normalized for body size invariance
-3. **Targeted Features**: Biomechanically-motivated features for specific confusion patterns
-4. **Tempo Preservation**: Separate duration metadata to preserve timing after resampling
+2. **Normalization**: Pelvis-centered, torso-length scaled for body size invariance
+3. **View-Specific Features**: Different specialized features for front vs side camera angles
+4. **Targeted Features**: Biomechanically-motivated features for specific confusion patterns
+5. **Tempo Preservation**: Separate duration metadata to preserve timing after resampling
+
+### Experimental Results Summary
+
+| View | Config | Features | Accuracy | Macro F1 | Notable Improvements |
+|------|--------|----------|----------|----------|---------------------|
+| Front | Baseline | 19 | ~75% | ~73% | - |
+| Front | Specialized | 37 | ~78% | ~76% | Curl variants, Deadlift/Rows |
+| Side | Baseline | 19 | 89.26% | 87.74% | - |
+| Side | Specialized | 37 | 90.80% | 90.59% | Shrugs, Overhead Triceps Extension |
 
 ### Implementation Reference
 
@@ -464,8 +565,10 @@ X, y, subject_ids, meta = load_pose_npz_temporal(
 |-----------|------|
 | Feature extraction | `src/preprocessing/preprocess_pose_RGB.py` |
 | Data loading | `src/data/data_loader.py` |
-| Preprocessing notebook | `notebooks/exer_recog/00_pose_preprocessing.ipynb` |
+| Preprocessing notebook | `notebooks/pose_preprocessing/` |
 | MLP training | `notebooks/exer_recog/06_pose_mlp.ipynb` |
+| Front config | `config/experiment_6_ablation_specialized_front.yaml` |
+| Side config | `config/experiment_6_ablation_specialized_side.yaml` |
 
 ---
 

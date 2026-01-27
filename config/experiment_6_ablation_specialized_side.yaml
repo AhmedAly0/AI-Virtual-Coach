@@ -1,0 +1,91 @@
+# Experiment 6: Base + Side-View Specialized Features (SIDE VIEW)
+#
+# Tests side-view specialized discrimination features for confusion clusters:
+# - 18 side-view specialized features targeting side-view confusion patterns
+#
+# Feature Groups:
+# - Group 1 (Vertical Displacement, 4): shoulder_elevation_y, heel_ground_clearance,
+#           shoulder_hip_y_ratio, ear_shoulder_compression
+#           → Target: Shrugs vs Calf Raises
+#
+# - Group 2 (Overhead Arm Position, 4): elbow_above_shoulder, wrist_above_elbow,
+#           upper_arm_vertical_angle_side, forearm_vertical_angle_side
+#           → Target: Overhead Triceps Extension
+#
+# - Group 3 (Sagittal Arm Trajectory, 4): wrist_forward_of_shoulder, elbow_forward_of_hip,
+#           arm_reach_forward, elbow_tuck_side
+#           → Target: Curl variants, Pressing movements
+#
+# - Group 4 (Hip Hinge Profile, 4): torso_angle_from_vertical, hip_behind_ankle,
+#           shoulder_forward_of_hip, knee_hip_alignment_z
+#           → Target: Deadlift/Rows/Kickbacks
+#
+# - Group 5 (Postural Stability, 2): stance_width_normalized, center_of_mass_y
+#           → Target: General body position context
+#
+# Combined with base: 19 + 18 = 37 features × 50 timesteps = 1850 input
+
+dataset:
+  random_seed: 42
+  val_ratio: 0.15
+  test_ratio: 0.30
+  stratified: true
+  feature_type: 'side_all_extended'  # 19 base + 18 side specialized = 37 features
+
+
+model:
+  # Architecture for 37 features × 50 = 1850 input
+  # Slightly larger capacity to handle additional specialized features
+  hidden_sizes: [512, 256, 128]
+  dropout: 0.38
+  num_classes: 15
+
+training:
+  batch_size: 16
+  lr: 0.00005
+  max_epochs: 220
+  optimizer: adam
+
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: val_loss
+    patience: 65
+    restore_best_weights: true
+    min_delta: 0.0
+  reduce_lr_on_plateau:
+    enabled: true
+    monitor: val_loss
+    factor: 0.5
+    patience: 18
+    min_lr: 1.0e-7
+    verbose: 1
+
+multi_run:
+  enabled: true
+  num_runs: 30
+  base_seed: 42
+  save_all_runs: true
+  save_all_confusion_matrices: true
+  aggregation:
+    compute_stats: true
+    compute_per_class_f1: true
+    metrics:
+      - test_accuracy
+      - test_macro_f1
+
+results:
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_ablation_specialized/side
+  save_metrics: true
+  save_confusion_matrix: true
+  save_history: true
+
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+metrics:
+  primary: macro_f1
+  secondary:
+    - accuracy
+    - loss

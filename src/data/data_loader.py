@@ -271,11 +271,38 @@ def load_pose_enhanced_data(
         base_names = [str(name) for name in data['all_feature_names']]
         specialized_names = [str(name) for name in data['specialized_feature_names']]
         feature_names = base_names + specialized_names
+    elif feature_type == 'side_specialized':
+        # Side-view specialized features only (18 features)
+        if 'X_side_specialized' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_side_specialized' field. "
+                "Please use an enhanced pose NPZ file with side-view specialized features."
+            )
+        features = data['X_side_specialized']
+        feature_names = [str(name) for name in data['side_specialized_feature_names']]
+    elif feature_type == 'side_all_extended':
+        # Combine base features (19) with side-view specialized features (18) = 37 total
+        if 'X_all_features' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_all_features' field. "
+                "Please use an enhanced pose NPZ file (v2+)."
+            )
+        if 'X_side_specialized' not in data:
+            raise KeyError(
+                f"NPZ file at {npz_path} is missing 'X_side_specialized' field. "
+                "Please use an enhanced pose NPZ file with side-view specialized features."
+            )
+        base_features = data['X_all_features']
+        side_specialized_features = data['X_side_specialized']
+        features = np.concatenate([base_features, side_specialized_features], axis=2)
+        base_names = [str(name) for name in data['all_feature_names']]
+        side_specialized_names = [str(name) for name in data['side_specialized_feature_names']]
+        feature_names = base_names + side_specialized_names
     else:
         raise ValueError(
             f"Invalid feature_type: {feature_type}. "
             "Use 'angles', 'distances', 'all', 'landmarks', 'specialized', "
-            "'all_extended', or 'base_specialized'."
+            "'all_extended', 'base_specialized', 'side_specialized', or 'side_all_extended'."
         )
     
     exercise_names = data['exercise_names']
