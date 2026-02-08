@@ -1,6 +1,23 @@
-# Pose Feature Engineering: Complete Documentation
+# ⚠️ DEPRECATED — See [README.md](../README.md) instead
 
-## Overview
+This document has been **consolidated into the unified [README.md](../README.md)** at the repository root.
+
+## Content Moved
+
+- **Feature Engineering Overview** → [README.md § Feature Engineering (Deep Dive)](../README.md#feature-engineering)
+- **Pose Normalization** → [README.md § Feature Engineering](../README.md#feature-engineering)
+- **Temporal Resampling** → [README.md § Feature Engineering](../README.md#feature-engineering)
+- **Feature Descriptions** → [README.md § Feature Engineering](../README.md#feature-engineering)
+
+## Why Consolidated?
+
+The four separate documentation files have been merged into a single comprehensive README that serves as both a GitHub landing page and a complete technical reference.
+
+**Please refer to [README.md](../README.md) for all information.**
+
+---
+
+_This file is deprecated and no longer maintained. [Click here to view the main README](../README.md)._
 
 This document provides a comprehensive overview of the feature engineering approach developed for exercise recognition using MediaPipe 3D pose landmarks. It traces the evolution from basic angle-based features to advanced specialized discrimination features, culminating in a robust 37-feature vector optimized for 15-class exercise classification.
 

@@ -1,6 +1,22 @@
-# Subject-Wise Data Splitting Methodology for Exercise Recognition
+# ⚠️ DEPRECATED — See [README.md](../README.md) instead
 
-## Overview
+This document has been **consolidated into the unified [README.md](../README.md)** at the repository root.
+
+## Content Moved
+
+- **Data Splitting Methodology** → [README.md § Subject-Wise Data Splitting (Deep Dive)](../README.md#subject-wise-data-splitting)
+- **Rationale & Validation** → [README.md § Subject-Wise Data Splitting](../README.md#subject-wise-data-splitting)
+- **Implementation Details** → [README.md § Subject-Wise Data Splitting](../README.md#subject-wise-data-splitting)
+
+## Why Consolidated?
+
+The four separate documentation files have been merged into a single comprehensive README that serves as both a GitHub landing page and a complete technical reference.
+
+**Please refer to [README.md](../README.md) for all information.**
+
+---
+
+_This file is deprecated and no longer maintained. [Click here to view the main README](../README.md)._
 
 This document describes the **subject-wise splitting approach** used across all exercise recognition experiments to ensure proper generalization testing and prevent data leakage. This methodology is fundamental to evaluating whether our models learn exercise movements rather than individual body characteristics.
 

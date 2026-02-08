@@ -1,6 +1,24 @@
-# AI Virtual Coach — Project Structure
+# ⚠️ DEPRECATED — See [README.md](../README.md) instead
 
-## 🎯 Project Overview
+This document has been **consolidated into the unified [README.md](../README.md)** at the repository root.
+
+## Content Moved
+
+- **Project Structure** → [README.md § Project Structure](../README.md#project-structure)
+- **Module Reference** → [README.md § Technical Deep Dive](../README.md#technical-deep-dive)
+- **Installation** → [README.md § Installation & Setup](../README.md#installation--setup)
+- **Exercises** → [README.md § Supported Exercises](../README.md#supported-exercises)
+- **Dependencies** → [README.md § Key Dependencies](../README.md#key-dependencies)
+
+## Why Consolidated?
+
+The four separate documentation files have been merged into a single comprehensive README that serves as both a GitHub landing page and a complete technical reference.
+
+**Please refer to [README.md](../README.md) for all information.**
+
+---
+
+_This file is deprecated and no longer maintained. [Click here to view the main README](../README.md)._
 
 This project implements an **AI-powered virtual fitness coach** that combines:
 

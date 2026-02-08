@@ -1,6 +1,24 @@
-# AI Virtual Coach — Coaching Agent Module
+# ⚠️ DEPRECATED — See [README.md](../README.md) instead
 
-## Technical Documentation
+This document has been **consolidated into the unified [README.md](../README.md)** at the repository root.
+
+## Content Moved
+
+- **Coaching Agent Architecture** → [README.md § Coaching Agent (Deep Dive)](../README.md#coaching-agent)
+- **LangGraph Workflow** → [README.md § Coaching Agent](../README.md#coaching-agent)
+- **State Models** → [README.md § Coaching Agent](../README.md#coaching-agent)
+- **Prompts & Config** → [README.md § Coaching Agent](../README.md#coaching-agent)
+- **API Reference** → [README.md § Backend API Contract](../README.md#backend-api-contract)
+
+## Why Consolidated?
+
+The four separate documentation files have been merged into a single comprehensive README that serves as both a GitHub landing page and a complete technical reference.
+
+**Please refer to [README.md](../README.md) for all information.**
+
+---
+
+_This file is deprecated and no longer maintained. [Click here to view the main README](../README.md)._
 
 > **Module path:** `src/agents/`
 > **Pipeline stage:** Stage 4 — Coaching Feedback Generation
