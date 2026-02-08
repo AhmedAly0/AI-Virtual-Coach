@@ -1,8 +1,8 @@
 """
-Data loading utilities for GEI (Gait Energy Image) datasets.
+Data loading utilities for exercise recognition datasets.
 
-This module handles loading GEI images from folder structures and splitting
-datasets by subject IDs to prevent data leakage.
+This module handles loading GEI images and pose-feature NPZ files,
+and splitting datasets by subject IDs to prevent data leakage.
 """
 
 import os
@@ -97,77 +97,6 @@ def load_pose_data(npz_path: str) -> Tuple[List[Tuple[str, np.ndarray, str, str]
         summary['unique_subjects'],
         summary['unique_classes'],
         view_label,
-    )
-    return dataset, summary
-
-
-def load_pose_temporal_data(npz_path: str) -> Tuple[List[Tuple[str, np.ndarray, str, str]], Dict]:
-    """Load pose temporal features from a single NPZ file.
-
-    Args:
-        npz_path (str): Path to pose temporal NPZ file (front or side view).
-
-    Returns:
-        Tuple containing:
-        - dataset: List of (exercise_name, temporal_features, subject_id, view) tuples
-          where temporal_features has shape (T_fixed, num_angles), e.g., (50, 9)
-        - summary: Dict with keys: count, unique_subjects, unique_classes, view, 
-          angle_names, temporal_shape
-
-    Raises:
-        FileNotFoundError: If NPZ file doesn't exist.
-        KeyError: If NPZ file is missing required fields.
-    """
-
-    # Infer view from filename
-    view_label = 'front' if 'front' in str(npz_path).lower() else 'side'
-    
-    data = np.load(npz_path, allow_pickle=True)
-    
-    # Load temporal features (shape: (num_reps, T_fixed, num_angles))
-    if 'X_temporal' not in data:
-        raise KeyError(
-            f"NPZ file at {npz_path} is missing required 'X_temporal' field. "
-            "Please use a temporal pose NPZ file."
-        )
-    
-    temporal_features = data['X_temporal']  # Shape: (num_reps, 50, 9)
-    exercise_names = data['exercise_names']
-    subject_ids = data['subject_ids']  # Integer array
-    
-    # Read angle_names from NPZ (required field)
-    if 'angle_names' not in data:
-        raise KeyError(
-            f"NPZ file at {npz_path} is missing required 'angle_names' field. "
-            "Please regenerate the NPZ file with preprocessing script."
-        )
-    angle_names = [str(name) for name in data['angle_names']]
-
-    dataset: List[Tuple[str, np.ndarray, str, str]] = []
-    for features, exercise_name, subject_id in zip(temporal_features, exercise_names, subject_ids):
-        # Convert integer subject_id to normalized string format
-        subject = _normalize_subject_id(str(int(subject_id)))
-        features_array = np.asarray(features, dtype=np.float32)  # Shape: (T_fixed, num_angles)
-        dataset.append((exercise_name, features_array, subject, view_label))
-
-    temporal_shape = temporal_features.shape[1:]  # (T_fixed, num_angles), e.g., (50, 9)
-    
-    summary = {
-        'count': len(dataset),
-        'unique_subjects': len(set(item[2] for item in dataset)),
-        'unique_classes': len(set(item[0] for item in dataset)),
-        'view': view_label,
-        'angle_names': angle_names,
-        'temporal_shape': temporal_shape,
-    }
-
-    logger.info(
-        "[load_pose_temporal_data] Loaded %s samples (%s subjects, %s classes) from %s view, temporal shape: %s",
-        summary['count'],
-        summary['unique_subjects'],
-        summary['unique_classes'],
-        view_label,
-        temporal_shape,
     )
     return dataset, summary
 

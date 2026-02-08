@@ -1,303 +1,334 @@
-# GEI Exercise Recognition - Refactored Structure
+# AI Virtual Coach — Project Structure
 
 ## 🎯 Project Overview
-This project implements deep learning-based exercise recognition using Gait Energy Images (GEI) with two distinct experimental approaches comparing different transfer learning strategies.
+
+This project implements an **AI-powered virtual fitness coach** that combines:
+
+1. **Exercise Recognition** — Classify which exercise a person is performing from MediaPipe pose landmarks using a temporal MLP.
+2. **Form Assessment** — Score repetition quality per exercise using per-exercise ML models.
+3. **Coaching Agent** — Generate personalized post-exercise feedback via a LangGraph agent backed by Gemini LLM.
+
+The system is designed for a **mobile (Flutter) front-end** that streams pose data to a backend API.
+
+---
 
 ## 📁 Project Structure
 
 ```
 ai-virtual-coach/
-├── config/                          # Experiment configurations
-│   ├── experiment_1.yaml           # 2-phase training config
-│   └── experiment_2.yaml           # 3-stage progressive config
+├── config/                              # Experiment YAML configs
+│   ├── experiment_1_baseline_front.yaml     # 19-feature MLP, front view
+│   ├── experiment_1_baseline_side.yaml      # 19-feature MLP, side view
+│   ├── experiment_1_specialized_front.yaml  # 37-feature MLP, front view
+│   ├── experiment_1_specialized_side.yaml   # 37-feature MLP, side view
+│   └── archive/                             # Legacy GEI configs (deprecated)
 │
-├── datasets/                        # Data directory
-│   ├── GEIs_of_rgb_front/
-│   │   └── GEIs/                   # Main GEI dataset
-│   ├── Filtered clips/             # Video clips
-│   └── metadata.xlsx.csv
+├── datasets/
+│   ├── Clips/                           # Raw exercise video clips (15 exercises)
+│   ├── GEIs_of_rgb_front/              # Front-view Gait Energy Images (legacy)
+│   ├── GEIs_of_rgb_side/               # Side-view Gait Energy Images (legacy)
+│   ├── Mediapipe pose estimates/        # ★ Active NPZ data
+│   │   ├── pose_data_front_19_features.npz
+│   │   └── pose_data_side_19_features.npz
+│   ├── old pose estimates/              # Legacy NPZ files
+│   ├── Annotation aspects.txt           # Per-exercise assessment criteria
+│   ├── metadata.xlsx.csv                # Subject demographics
+│   ├── pose_landmarker_full.task        # MediaPipe model (full)
+│   └── pose_landmarker_lite.task        # MediaPipe model (lite)
 │
-├── experiments/                     # Experiment results
-│   └── results/
-│       ├── exp_01_baseline/        # Experiment 1 results
-│       │   ├── README.md
-│       │   ├── efficientnet_b0/
-│       │   ├── resnet50/
-│       │   └── ...
-│       └── exp_02_progressive/     # Experiment 2 results
-│           ├── README.md
-│           ├── efficientnet_b0/
-│           ├── resnet50/
-│           └── ...
-│
-├── notebooks/                       # Jupyter notebooks
-│   ├── exer_reccog_gei_tf.ipynb   # Main experiment notebook
-│   └── EDA/
-│       └── Analysis.ipynb
-│
-├── src/                            # Source code (MODULAR STRUCTURE)
-│   ├── data/                       # Data loading & preprocessing
-│   │   ├── __init__.py
-│   │   ├── data_loader.py         # load_data, split_by_subject
-│   │   ├── preprocessing.py       # prep_tensors, resize, normalize
-│   │   ├── augmentation.py        # data_augmentater, configs
-│   │   └── dataset_builder.py     # build_datasets, make_split
+├── src/                                 # ★ Source code
+│   ├── agents/                          # Coaching feedback agent
+│   │   ├── coaching_agent.py            # LangGraph workflow (Gemini LLM)
+│   │   ├── config.py                    # Agent configuration & API keys
+│   │   ├── exercise_criteria.py         # Per-exercise assessment criteria
+│   │   ├── prompts.py                   # LLM prompt templates
+│   │   └── state.py                     # Pydantic state models
 │   │
-│   ├── models/                     # Model architectures
-│   │   ├── __init__.py
-│   │   └── model_builder.py       # build_model_*, BACKBONE_REGISTRY
+│   ├── data/                            # Data loading & preprocessing
+│   │   ├── data_loader.py              # load_pose_data, load_pose_enhanced_data, split_by_subject
+│   │   ├── preprocessing.py            # prep_tensors, resize, normalize
+│   │   ├── augmentation.py             # Data augmentation pipelines
+│   │   └── dataset_builder.py          # tf.data.Dataset builders
 │   │
-│   ├── training/                   # Training experiments
-│   │   ├── __init__.py
-│   │   ├── experiment_1.py        # 2-phase training
-│   │   └── experiment_2.py        # 3-stage progressive
+│   ├── models/                          # Model architectures
+│   │   ├── model_builder.py            # build_model_*, BACKBONE_REGISTRY
+│   │   └── assessment_models/          # 30 serialized .joblib files (15 exercises × model + scaler)
 │   │
-│   ├── utils/                      # Utilities
-│   │   ├── __init__.py
-│   │   ├── io_utils.py            # Folder setup, seed setting
-│   │   ├── metrics.py             # Experiment tracking
-│   │   └── visualization.py       # Plots and comparisons
+│   ├── scripts/                         # Training scripts
+│   │   ├── experiment_1.py             # ★ Pose MLP training (single + multi-run)
+│   │   ├── vc_core.py                  # Video → assessment pipeline utilities
+│   │   ├── video_to_assessment_cnn_all.py  # End-to-end video assessment (PyTorch)
+│   │   ├── gei_embeddings.py           # GEI embedding utilities (ArcFace)
+│   │   ├── gei_grid_search_utils.py    # GEI grid-search helpers
+│   │   └── archive/                    # Archived GEI experiment scripts (deprecated)
 │   │
-│   └── Training/                   # Legacy code (DEPRECATED)
-│       ├── gei_lib_tf.py          # ⚠️ DEPRECATED - Use experiment_2.py
-│       ├── gei_lib_tf_v2.py       # ⚠️ DEPRECATED - Use experiment_1.py
-│       └── deprecated/
+│   ├── pipelines/                       # API contracts & orchestration
+│   │   └── backend_api_contract.md     # Flutter ↔ Backend API specification
+│   │
+│   ├── preprocessing/                   # Raw data preprocessing
+│   │   ├── preprocess_pose_RGB.py      # MediaPipe pose extraction from videos
+│   │   └── analyze_frame_distribution.py  # Frame/FPS/duration analysis
+│   │
+│   └── utils/                           # Shared utilities
+│       ├── io_utils.py                 # Folder management, seed setting
+│       ├── metrics.py                  # Experiment tracking, parameter counting
+│       └── visualization.py            # Training curves, confusion matrices, comparisons
 │
-└── results/                        # Old results (to be migrated)
-    ├── efficientnet_b0/
-    ├── resnet50/
-    └── ...
+├── notebooks/
+│   ├── EDA/
+│   │   └── Analysis.ipynb               # Exploratory data analysis
+│   ├── exer_recog/
+│   │   ├── 01_pose_mlp.ipynb            # ★ Main experiment notebook
+│   │   ├── 99_comparison.ipynb          # Cross-experiment comparison
+│   │   └── archive/                     # Archived GEI notebooks
+│   └── pose_preprocessing/
+│       ├── 00_pose_preprocessing.ipynb           # Pose feature extraction
+│       └── 00b_frame_distribution_analysis.ipynb # Frame distribution analysis
+│
+├── output/
+│   ├── exer_recog/
+│   │   ├── exp_01_pose_mlp_baseline/    # ★ 19-feature results (front/ + side/)
+│   │   ├── exp_01_pose_mlp_specialized/ # ★ 37-feature results (front/ + side/)
+│   │   ├── exp_01_baseline/             # Legacy GEI baseline results
+│   │   ├── exp_02_progressive/          # Legacy GEI progressive results
+│   │   ├── exp_03_smart_heads/          # Legacy GEI smart-heads results
+│   │   ├── exp_04_regularized/          # Legacy GEI regularized results
+│   │   └── exp_05_small_cnn/            # Legacy GEI small-CNN results
+│   └── assessment/
+│       ├── outputs_front/               # Front-view assessment outputs
+│       └── outputs_side/                # Side-view assessment outputs
+│
+├── tests/
+│   ├── test_experiment_1.py             # Pose MLP validation tests
+│   └── test_05_small_cnn.py             # Legacy GEI test
+│
+├── docs/
+│   ├── EXPERIMENT_1_QUICK_REFERENCE.md  # Experiment 1 usage guide
+│   ├── FEATURE_ENGINEERING.md           # Feature engineering documentation
+│   ├── SUBJECT_WISE_SPLITTING_METHODOLOGY.md
+│   ├── COACHING_AGENT_DOCUMENTATION.md  # Coaching agent architecture
+│   ├── REFACTORING_SUMMARY.md
+│   ├── PROJECT_STRUCTURE.md             # ← This file
+│   ├── Research_Paper_Draft/            # Paper drafts
+│   └── archive/                         # Archived docs
+│
+└── plots/                               # Static plots & figures
 ```
 
-## 🔬 Experiments
+---
 
-### Experiment 1: 2-Phase Transfer Learning (Baseline)
-**Location**: `src/scripts/experiment_1.py`  
-**Config**: `config/experiment_1.yaml`  
-**Results**: `experiments/results/exp_01_baseline/`
+## 🔬 Experiment 1: Pose-Based MLP
 
-**Strategy**:
-- Phase 1: Frozen backbone (10 epochs)
-- Phase 2: Full unfreeze (50 epochs)
-- ✅ Validation monitoring (EarlyStopping, ReduceLROnPlateau)
-- ✅ Basic augmentation (flip, translation)
-- ✅ Standard classification head
+**The sole active experiment** for exercise recognition.
 
-### Experiment 2: 3-Stage Progressive Unfreezing (Advanced)
-**Location**: `src/scripts/experiment_2.py`  
-**Config**: `config/experiment_2.yaml`  
-**Results**: `experiments/results/exp_02_progressive/`
+| Item | Location |
+|------|----------|
+| Training script | `src/scripts/experiment_1.py` |
+| Configs (baseline) | `config/experiment_1_baseline_{front,side}.yaml` |
+| Configs (specialized) | `config/experiment_1_specialized_{front,side}.yaml` |
+| Notebook | `notebooks/exer_recog/01_pose_mlp.ipynb` |
+| Results (baseline) | `output/exer_recog/exp_01_pose_mlp_baseline/` |
+| Results (specialized) | `output/exer_recog/exp_01_pose_mlp_specialized/` |
 
-**Strategy**:
-- Stage 1: Frozen (15-35 epochs)
-- Stage 2: 10% unfrozen (8-20 epochs)
-- Stage 3: 30% unfrozen (17-25 epochs)
-- ✅ Blind training (no validation monitoring)
-- ✅ Enhanced augmentation (flip, translation, rotation, zoom, brightness)
-- ✅ Architecture-specific heads
-- ✅ Per-backbone epoch tuning
+### Feature Sets
 
-## 🚀 Quick Start
+| Variant | Features | Description |
+|---------|----------|-------------|
+| **Baseline** | 19 per timestep | 13 joint angles + 6 pairwise distances |
+| **Specialized** | 37 per timestep | 19 base + 18 exercise-specific discrimination features |
 
-### Basic Usage
+### Architecture
+
+- **Input**: Flattened temporal features (T × F) → dense vector
+- **MLP**: 3 hidden layers `[512, 256, 128]` with BatchNorm + Dropout
+- **Output**: 15-class softmax
+- **Multi-run**: 30 seeds for statistical robustness
+
+### Training Functions
 
 ```python
-from src.data import load_data
-from src.training import train_experiment_1, train_experiment_2
-from src.utils import set_global_seed
+from src.scripts import train_experiment_1, train_experiment_1_multi_run
 
-# Set reproducibility
-set_global_seed(42)
-
-# Load dataset
-dataset = load_data('datasets/GEIs_of_rgb_front/GEIs')
-
-# Define backbones
-backbones = [
-    'efficientnet_b0',
-    'resnet50',
-    'mobilenet_v2',
-    'vgg16'
-]
-
-# Run Experiment 1 (Baseline)
-exp1_results = train_experiment_1(
-    dataset=dataset,
-    backbones=backbones,
-    num_runs=3,
-    test_ratio=0.3
+# Single run
+results = train_experiment_1(
+    npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
+    config_path='config/experiment_1_baseline_front.yaml'
 )
 
-# Run Experiment 2 (Progressive)
-exp2_results = train_experiment_2(
-    dataset=dataset,
-    backbones=backbones,
-    num_runs=3,
-    test_ratio=0.3
+# Multi-run (30 seeds)
+all_runs, stats = train_experiment_1_multi_run(
+    npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
+    config_path='config/experiment_1_baseline_front.yaml'
 )
 ```
 
-### Comparing Results
+---
 
-```python
-from src.utils import (
-    load_backbone_results_with_config,
-    get_all_model_parameters,
-    create_comprehensive_comparison,
-    generate_statistical_comparison
-)
+## 🏋️ Exercise Assessment Pipeline
 
-# Load results
-exp1_results = load_backbone_results_with_config('experiments/results/exp_01_baseline')
-exp2_results = load_backbone_results_with_config('experiments/results/exp_02_progressive')
+The assessment pipeline scores individual repetitions of a recognized exercise:
 
-# Get model parameters
-params_df = get_all_model_parameters(backbones)
+1. **Video → Pose**: MediaPipe extracts 33 3D landmarks per frame (`src/preprocessing/preprocess_pose_RGB.py`)
+2. **Feature Engineering**: Joint angles, distances, and specialized features computed from landmarks
+3. **Per-Exercise Models**: 15 scikit-learn models (`src/models/assessment_models/*.joblib`) score rep quality
+4. **Coaching Agent**: LangGraph workflow generates natural-language feedback (`src/agents/coaching_agent.py`)
 
-# Create comparison
-create_comprehensive_comparison(exp1_results, params_df, 'experiments/comparisons/exp1')
-generate_statistical_comparison(exp1_results, 'experiments/comparisons/exp1')
-```
+### API Contract
 
-## 📊 Supported Backbones
+Defined in `src/pipelines/backend_api_contract.md`:
+- `POST /api/session/analyze` — receives pose sequence, returns recognition + assessment + coaching feedback
 
-| Backbone | Parameters | Input Size |
-|----------|-----------|------------|
-| EfficientNetV2 B0 | 7.1M | 224×224 |
-| EfficientNetV2 B2 | 10.1M | 224×224 |
-| EfficientNetV2 B3 | 14.4M | 224×224 |
-| ResNet50 | 25.6M | 224×224 |
-| VGG16 | 138.4M | 224×224 |
-| MobileNetV2 | 3.5M | 224×224 |
-| MobileNetV3 Large | 5.4M | 224×224 |
+---
 
-## 🔧 Module Documentation
+## 🤖 Coaching Agent (LangGraph)
+
+| Module | Purpose |
+|--------|---------|
+| `coaching_agent.py` | Stateful LangGraph workflow — loads criteria → analyzes scores → LLM feedback |
+| `config.py` | API keys, model config, temperature settings |
+| `exercise_criteria.py` | Maps 15 exercise IDs → assessment criteria strings |
+| `prompts.py` | `ChatPromptTemplate` for Gemini |
+| `state.py` | Pydantic state models (`AgentState`, `RepScore`, etc.) |
+
+---
+
+## 🔧 Module Reference
 
 ### src/data/
-- **data_loader.py**: Load GEI images from nested folder structure
-- **preprocessing.py**: Image preprocessing (resize, normalize, tensor conversion)
-- **augmentation.py**: Data augmentation pipelines (basic & enhanced)
-- **dataset_builder.py**: Build tf.data.Dataset with augmentation
+
+| Module | Key Exports |
+|--------|-------------|
+| `data_loader.py` | `load_data`, `load_pose_data`, `load_pose_enhanced_data`, `split_by_subject_two_way`, `split_by_subjects_three_way`, `build_subject_folds`, `verify_subject_split_integrity` |
+| `preprocessing.py` | `prep_tensors`, `prep_tensors_with_preprocess`, `prep_tensors_grayscale` |
+| `augmentation.py` | `data_augmentater`, `BASIC_AUGMENTATION`, `ENHANCED_AUGMENTATION` |
+| `dataset_builder.py` | `build_datasets`, `build_datasets_three_way`, `build_pose_datasets_three_way`, `build_streaming_dataset` |
 
 ### src/models/
-- **model_builder.py**: Build all model architectures
-  - `build_model()`: Simple CNN
-  - `build_model_for_backbone()`: Standard transfer learning (Experiment 1)
-  - `build_model_for_backbone_v2()`: Architecture-specific heads (Experiment 2)
-  - `get_callbacks()`: EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+
+| Module | Key Exports |
+|--------|-------------|
+| `model_builder.py` | `build_model` (CNN), `build_model_for_backbone` / `_v2` / `_v3` / `_v4` (transfer learning), `get_callbacks`, `BACKBONE_REGISTRY` |
+| `assessment_models/` | 30 `.joblib` files — per-exercise model + scaler pairs |
 
 ### src/scripts/
-- **experiment_1.py**: 2-phase training with validation monitoring
-- **experiment_2.py**: 3-stage progressive blind training
+
+| Module | Purpose |
+|--------|---------|
+| `experiment_1.py` | `train_experiment_1()`, `train_experiment_1_multi_run()` — Pose MLP |
+| `vc_core.py` | Video → assessment pipeline utilities |
+| `video_to_assessment_cnn_all.py` | End-to-end video → per-rep assessment (PyTorch) |
+| `gei_embeddings.py` | GEI embedding extraction (ArcFace) |
+| `gei_grid_search_utils.py` | Grid-search helpers for GEI models |
+| `archive/` | 5 deprecated GEI experiment scripts |
 
 ### src/utils/
-- **io_utils.py**: Folder management, seed setting
-- **metrics.py**: Experiment tracking, parameter counting
-- **visualization.py**: Training curves, confusion matrices, comparisons
 
-## ⚠️ Migration from Legacy Code
+| Module | Key Exports |
+|--------|-------------|
+| `io_utils.py` | `set_global_seed`, `create_results_folder`, `increment_run_folder` |
+| `metrics.py` | `ExperimentTracker`, `get_all_model_parameters`, `log_fold_results` |
+| `visualization.py` | `plot_training_curves`, `plot_confusion_matrix`, `create_comprehensive_comparison` |
 
-### Old Code (DEPRECATED)
-```python
-import gei_lib_tf as lib  # ❌ DEPRECATED
+### src/preprocessing/
 
-dataset = lib.load_data('datasets/GEIs_of_rgb_front/GEIs')
-results = lib.train_one_run_progressive(...)
-```
+| Module | Purpose |
+|--------|---------|
+| `preprocess_pose_RGB.py` | MediaPipe 3D pose extraction from video, joint angle computation |
+| `analyze_frame_distribution.py` | Frame count / FPS / duration statistics for T_fixed selection |
 
-### New Code (RECOMMENDED)
-```python
-from src.data import load_data  # ✅ MODULAR
-from src.training import train_one_run_progressive
+---
 
-dataset = load_data('datasets/GEIs_of_rgb_front/GEIs')
-results = train_one_run_progressive(...)
-```
+## 📊 Supported Exercises (15 classes)
 
-## 📝 Configuration Files
+| ID | Exercise |
+|----|----------|
+| 1 | Dumbbell Shoulder Press |
+| 2 | Hammer Curls |
+| 3 | Standing Dumbbell Front Raises |
+| 4 | Lateral Raises |
+| 5 | Bulgarian Split Squat |
+| 6 | EZ Bar Curls |
+| 7 | Inclined Dumbbell Bench Press |
+| 8 | Overhead Triceps Extension |
+| 9 | Shrugs |
+| 10 | Weighted Squats |
+| 11 | Seated Biceps Curls |
+| 12 | Triceps Kickbacks |
+| 13 | Rows |
+| 14 | Deadlift |
+| 15 | Calf Raises |
 
-### experiment_1.yaml
-```yaml
-training:
-  frozen_epochs: 10
-  fine_tune_epochs: 50
-  batch_size: 32
+---
 
-augmentation:
-  horizontal_flip: true
-  translation: 0.15
-  rotation: false  # Experiment 1 specific
-```
-
-### experiment_2.yaml
-```yaml
-training:
-  progressive_unfreezing: true
-  unfreeze_stage_1_percent: 0.10
-  unfreeze_stage_2_percent: 0.30
-
-epochs:  # Per-backbone tuning
-  efficientnet_b0: {frozen: 25, stage1: 15, stage2: 25}
-  resnet50: {frozen: 20, stage1: 10, stage2: 20}
-
-augmentation:
-  rotation: true  # ±18 degrees
-  zoom: true      # ±10%
-  brightness: true  # ±10%
-```
-
-## 🔍 Key Differences Between Experiments
-
-| Feature | Experiment 1 | Experiment 2 |
-|---------|-------------|--------------|
-| **Phases** | 2 | 3 |
-| **Unfreezing** | 0% → 100% | 0% → 10% → 30% |
-| **Validation** | Monitored | Blind |
-| **Augmentation** | Basic (2) | Enhanced (5) |
-| **Epochs** | Fixed (60) | Per-backbone (40-80) |
-| **Heads** | Standard | Architecture-specific |
-| **Callbacks** | EarlyStopping + ReduceLR | ReduceLR only |
-
-## 📦 Dependencies
+## 📦 Key Dependencies
 
 ```
 tensorflow>=2.13.0
 numpy>=1.24.0
 pandas>=2.0.0
+scikit-learn>=1.3.0
+mediapipe>=0.10.0
+langchain / langgraph      # Coaching agent
+google-generativeai        # Gemini LLM
+pydantic>=2.0.0
 opencv-python>=4.8.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
-scikit-learn>=1.3.0
-tqdm>=4.66.0
 pyyaml>=6.0.0
+joblib>=1.3.0
 ```
 
-## 🧪 Testing
+---
 
-```python
-# Test data loading
-from src.data import load_data
-dataset = load_data('datasets/GEIs_of_rgb_front/GEIs')
-print(f"Loaded {len(dataset)} samples")
+## 📄 Configuration
 
-# Test model building
-from src.models import build_model_for_backbone
-model, preprocess_fn = build_model_for_backbone('resnet50', 224, 15)
-print(f"Model: {model.count_params()} parameters")
+Each YAML config controls a single experiment variant:
 
-# Test preprocessing
-from src.data import prep_tensors
-X_train, y_train = prep_tensors(dataset[:10], {}, 224)
-print(f"Tensors: {X_train.shape}, {y_train.shape}")
+```yaml
+# config/experiment_1_baseline_front.yaml (example)
+data:
+  npz_path: datasets/Mediapipe pose estimates/pose_data_front_19_features.npz
+  feature_type: all          # 19 features (13 angles + 6 distances)
+
+model:
+  hidden_layers: [512, 256, 128]
+  dropout: 0.35
+  num_classes: 15
+
+training:
+  batch_size: 16
+  learning_rate: 0.00006
+  max_epochs: 200
+
+callbacks:
+  early_stopping_patience: 60
+  reduce_lr_patience: 15
+
+multi_run:
+  num_runs: 30
+  base_seed: 42
+
+results:
+  base_dir: output/exer_recog/exp_01_pose_mlp_baseline/front
 ```
 
-## 📄 License
-[Your License Here]
+---
+
+## 📝 Archive
+
+Legacy GEI-based experiments (1–5) are archived but preserved for reference:
+
+| Location | Contents |
+|----------|----------|
+| `src/scripts/archive/` | 5 GEI training scripts (with deprecation warnings) |
+| `config/archive/` | 7 GEI YAML configs |
+| `notebooks/exer_recog/archive/` | 5 GEI notebooks |
+| `docs/archive/` | Historical refactoring docs |
+| `output/exer_recog/exp_01_baseline/` … `exp_05_small_cnn/` | Legacy GEI results |
+
+---
 
 ## 👤 Author
 Ahmed Mohamed Ahmed
-October 2025
 
-## 🙏 Acknowledgments
-- TensorFlow/Keras team for pretrained models
-- Research paper authors for GEI methodology
+**Last Updated:** February 8, 2026

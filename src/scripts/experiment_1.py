@@ -611,9 +611,3 @@ def train_experiment_1_multi_run(
     return all_run_results, aggregated_stats
 
 
-# Backward-compatible aliases (deprecated — use train_experiment_1 / train_experiment_1_multi_run)
-train_experiment_6 = train_experiment_1
-train_experiment_6_multi_run = train_experiment_1_multi_run
-train_experiment_6_temporal = train_experiment_1
-train_experiment_6_temporal_multi_run = train_experiment_1_multi_run
-
