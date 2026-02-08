@@ -1,4 +1,4 @@
-# Experiment 6: Base + Side-View Specialized Features (SIDE VIEW)
+# Experiment 1: Base + Side-View Specialized Features (SIDE VIEW)
 #
 # Tests side-view specialized discrimination features for confusion clusters:
 # - 18 side-view specialized features targeting side-view confusion patterns
@@ -75,7 +75,7 @@ multi_run:
       - test_macro_f1
 
 results:
-  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_ablation_specialized/side
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_01_pose_mlp_specialized/side
   save_metrics: true
   save_confusion_matrix: true
   save_history: true

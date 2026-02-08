@@ -1,4 +1,4 @@
-# Experiment 6: Base + Specialized Features (FRONT VIEW)
+# Experiment 1: Base + Specialized Features (FRONT VIEW)
 # 
 # Tests specialized discrimination features for confusion clusters:
 # - 18 specialized features targeting confusion clusters
@@ -58,7 +58,7 @@ multi_run:
       - test_macro_f1
 
 results:
-  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_ablation_specialized/front
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_01_pose_mlp_specialized/front
   save_metrics: true
   save_confusion_matrix: true
   save_history: true

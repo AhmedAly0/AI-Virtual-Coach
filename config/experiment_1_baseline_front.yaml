@@ -1,4 +1,4 @@
-# Experiment 6: Pose-based MLP baseline configuration (FRONT VIEW - TEMPORAL)
+# Experiment 1: Pose-based MLP baseline configuration (FRONT VIEW - TEMPORAL)
 # Temporal pose features with configurable feature selection
 # Supports: angles-only, distances-only, or all features (19 = 13 angles + 6 distances)
 
@@ -69,7 +69,7 @@ multi_run:
       - test_macro_f1
 
 results:
-  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_06_pose_mlp_temporal/front
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exp_01_pose_mlp_baseline/front
   save_metrics: true
   save_confusion_matrix: true
   save_history: true

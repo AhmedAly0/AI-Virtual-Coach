@@ -1,4 +1,11 @@
-"""Experiment 5: Small task-specific CNN with subject-wise k-fold CV."""
+import warnings
+warnings.warn(
+    "This GEI-based experiment is archived. Use pose-based experiment_1.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+"""[ARCHIVED] Experiment 5: Small task-specific CNN with subject-wise k-fold CV."""
 
 import json
 import logging

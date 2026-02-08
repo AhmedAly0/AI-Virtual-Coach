@@ -1,5 +1,12 @@
+import warnings
+warnings.warn(
+    "This GEI-based experiment is archived. Use pose-based experiment_1.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 """
-Experiment 2: 3-Stage Progressive Unfreezing with Blind Training
+[ARCHIVED] Experiment 2: 3-Stage Progressive Unfreezing with Blind Training
 
 Training Strategy:
 - Stage 1: Train with frozen backbone (no validation monitoring)

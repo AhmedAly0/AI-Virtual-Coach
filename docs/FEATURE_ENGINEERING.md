@@ -566,10 +566,10 @@ dataset, summary = load_pose_enhanced_data(
 | Feature extraction | `src/preprocessing/preprocess_pose_RGB.py` |
 | Data loading | `src/data/data_loader.py` |
 | Preprocessing notebook | `notebooks/pose_preprocessing/` |
-| MLP training | `notebooks/exer_recog/06_pose_mlp.ipynb` |
-| Front config | `config/experiment_6_ablation_specialized_front.yaml` |
-| Side config | `config/experiment_6_ablation_specialized_side.yaml` |
+| MLP training | `notebooks/exer_recog/01_pose_mlp.ipynb` |
+| Front config | `config/experiment_1_specialized_front.yaml` |
+| Side config | `config/experiment_1_specialized_side.yaml` |
 
 ---
 
-*Last Updated: January 2026*
+*Last Updated: February 2026*

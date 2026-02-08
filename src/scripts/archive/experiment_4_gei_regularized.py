@@ -1,5 +1,12 @@
+import warnings
+warnings.warn(
+    "This GEI-based experiment is archived. Use pose-based experiment_1.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 """
-Experiment 4: Regularized heads with dual pooling and AdamW optimizer.
+[ARCHIVED] Experiment 4: Regularized heads with dual pooling and AdamW optimizer.
 
 Key improvements over Experiment 3:
 - Dual pooling (GAP + GMP) for richer feature representation

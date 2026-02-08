@@ -1,5 +1,12 @@
+import warnings
+warnings.warn(
+    "This GEI-based experiment is archived. Use pose-based experiment_1.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 """
-Experiment 3: 2-Phase Transfer Learning with Architecture-Specific Heads
+[ARCHIVED] Experiment 3: 2-Phase Transfer Learning with Architecture-Specific Heads
 
 Training Strategy:
 - Phase 1: Train with frozen backbone (validation-monitored early stopping)

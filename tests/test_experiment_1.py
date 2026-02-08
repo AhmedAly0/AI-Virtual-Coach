@@ -1,4 +1,4 @@
-"""Test script for Experiment 6 with YAML config and multi-run support."""
+"""Test script for Experiment 1 (Pose MLP) with YAML config and multi-run support."""
 
 import sys
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.scripts.experiment_6 import train_experiment_6_static, train_experiment_6_multi_run
+from src.scripts.experiment_1 import train_experiment_1, train_experiment_1_multi_run
 
 
 def test_single_run_with_config():
@@ -15,8 +15,8 @@ def test_single_run_with_config():
     print("TEST 1: Single Run with Config")
     print("=" * 80)
     
-    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_static.npz'
-    config_path = PROJECT_ROOT / 'config' / 'experiment_6.yaml'
+    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_19_features.npz'
+    config_path = PROJECT_ROOT / 'config' / 'experiment_1_baseline_front.yaml'
     
     # Override multi_run.enabled temporarily for single run test
     import yaml
@@ -28,12 +28,12 @@ def test_single_run_with_config():
     config['multi_run']['enabled'] = False
     
     # Save temporary config
-    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_6_temp.yaml'
+    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_1_temp.yaml'
     with open(temp_config_path, 'w') as f:
         yaml.dump(config, f)
     
     try:
-        results = train_experiment_6_static(
+        results = train_experiment_1(
             npz_path=str(npz_path),
             config_path=str(temp_config_path)
         )
@@ -55,8 +55,8 @@ def test_multi_run():
     print("TEST 2: Multi-Run (3 runs for quick validation)")
     print("=" * 80)
     
-    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_static.npz'
-    config_path = PROJECT_ROOT / 'config' / 'experiment_6.yaml'
+    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_19_features.npz'
+    config_path = PROJECT_ROOT / 'config' / 'experiment_1_baseline_front.yaml'
     
     # Create test config with only 3 runs
     import yaml
@@ -66,12 +66,12 @@ def test_multi_run():
     config['multi_run']['enabled'] = True
     config['multi_run']['num_runs'] = 3
     
-    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_6_test.yaml'
+    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_1_test.yaml'
     with open(temp_config_path, 'w') as f:
         yaml.dump(config, f)
     
     try:
-        all_runs, stats = train_experiment_6_multi_run(
+        all_runs, stats = train_experiment_1_multi_run(
             npz_path=str(npz_path),
             config_path=str(temp_config_path)
         )
@@ -91,8 +91,8 @@ def test_backward_compatibility():
     print("TEST 3: Backward Compatibility (Legacy Parameters)")
     print("=" * 80)
     
-    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_static.npz'
-    config_path = PROJECT_ROOT / 'config' / 'experiment_6.yaml'
+    npz_path = PROJECT_ROOT / 'datasets' / 'Mediapipe pose estimates' / 'pose_data_front_19_features.npz'
+    config_path = PROJECT_ROOT / 'config' / 'experiment_1_baseline_front.yaml'
     
     # Create config with multi_run disabled
     import yaml
@@ -101,13 +101,13 @@ def test_backward_compatibility():
     
     config['multi_run']['enabled'] = False
     
-    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_6_legacy.yaml'
+    temp_config_path = PROJECT_ROOT / 'config' / 'experiment_1_legacy.yaml'
     with open(temp_config_path, 'w') as f:
         yaml.dump(config, f)
     
     try:
         # Use legacy parameter style (should override config)
-        results = train_experiment_6_static(
+        results = train_experiment_1(
             npz_path=str(npz_path),
             config_path=str(temp_config_path),
             seed=99,
@@ -125,7 +125,7 @@ def test_backward_compatibility():
 
 if __name__ == '__main__':
     print("\n" + "=" * 80)
-    print("EXPERIMENT 6 VALIDATION TESTS")
+    print("EXPERIMENT 1 (POSE MLP) VALIDATION TESTS")
     print("=" * 80)
     
     try:
