@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Starting Position",
+    "Top Position",
+    "Elbow Path",
+    "Tempo",
+    "Core stability"
+  ],
+  "feature_dim": 37,
+  "exercise": "Dumbbell shoulder press",
+  "view": "side",
+  "test_mae_0_10": 3.7790322303771973,
+  "val_mse_0_1": 0.10862497985363007,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "ROM",
+    "Knee status",
+    "Balance",
+    "Tempo",
+    "Peak hold"
+  ],
+  "feature_dim": 37,
+  "exercise": "Calf raises",
+  "view": "front",
+  "test_mae_0_10": 4.300000190734863,
+  "val_mse_0_1": 0.3100000023841858,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

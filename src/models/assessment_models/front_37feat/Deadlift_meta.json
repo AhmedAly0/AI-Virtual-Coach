@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Spine",
+    "symmetry",
+    "bar path",
+    "lockout",
+    "tempo"
+  ],
+  "feature_dim": 37,
+  "exercise": "Deadlift",
+  "view": "front",
+  "test_mae_0_10": 4.849999904632568,
+  "val_mse_0_1": 0.6807500123977661,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

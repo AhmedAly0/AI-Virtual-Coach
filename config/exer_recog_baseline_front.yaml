@@ -1,0 +1,85 @@
+# Experiment 1: Pose-based MLP baseline configuration (FRONT VIEW - TEMPORAL)
+# Temporal pose features with configurable feature selection
+# Supports: angles-only, distances-only, or all features (19 = 13 angles + 6 distances)
+
+dataset:
+  random_seed: 42
+  val_ratio: 0.15
+  test_ratio: 0.30
+  stratified: true
+  
+  # Feature selection configuration
+  # ---------------------------------
+  # feature_type: Which feature group to load from NPZ file
+  #   - 'angles': 13 joint angles only (650 features when flattened: 13 × 50)
+  #   - 'distances': 6 distance features only (300 features when flattened: 6 × 50)
+  #   - 'all': 19 combined features (950 features when flattened: 19 × 50) [RECOMMENDED]
+  feature_type: 'all'
+  
+  # selected_features: Fine-grained selection of individual features by name
+  # Options: ['all'] to use all features from feature_type, or list specific feature names:
+  # Angle names: ['left_elbow', 'right_elbow', 'left_shoulder', 'right_shoulder',
+  #               'left_hip', 'right_hip', 'left_knee', 'right_knee', 'torso_lean',
+  #               'left_ankle', 'right_ankle', 'left_wrist', 'right_wrist']
+  # Distance names: ['left_ear_shoulder_vert', 'right_ear_shoulder_vert',
+  #                  'left_wrist_shoulder_dist', 'right_wrist_shoulder_dist',
+  #                  'left_elbow_hip_dist', 'right_elbow_hip_dist']
+  selected_features: ['all']
+
+
+model:
+  # Architecture adjusted for feature_type='all' (19 features × 50 timesteps = 950 input)
+  # For angles-only (13 × 50 = 650), consider [384, 192, 96]
+  hidden_sizes: [512, 256, 128]
+  dropout: 0.35
+  num_classes: 15
+
+training:
+  batch_size: 16
+  lr: 0.00006
+  max_epochs: 200
+  optimizer: adam
+
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: val_loss
+    patience: 60  # Increased from 50 - more features may need longer convergence
+    restore_best_weights: true
+    min_delta: 0.0
+  reduce_lr_on_plateau:
+    enabled: true
+    monitor: val_loss
+    factor: 0.5
+    patience: 15
+    min_lr: 1.0e-7
+    verbose: 1
+
+multi_run:
+  enabled: true
+  num_runs: 30
+  base_seed: 42
+  save_all_runs: true
+  save_all_confusion_matrices: true
+  aggregation:
+    compute_stats: true
+    compute_per_class_f1: true
+    metrics:
+      - test_accuracy
+      - test_macro_f1
+
+results:
+  base_dir: /mnt/d/Graduation Project/ai-virtual-coach/output/exer_recog/exer_recog_baseline/front
+  save_metrics: true
+  save_confusion_matrix: true
+  save_history: true
+
+memory:
+  clear_session_after_run: true
+  force_gc_after_run: true
+
+metrics:
+  primary: macro_f1
+  secondary:
+    - accuracy
+    - loss

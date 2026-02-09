@@ -1,0 +1,227 @@
+{
+  "Bulgarian split squat": {
+    "test_mae": 4.447500228881836,
+    "val_mse": 0.28337499499320984,
+    "n_train": 48,
+    "n_val": 7,
+    "n_test": 20,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Rear foot",
+      "Front knee tracking",
+      "Torso angle",
+      "Depth",
+      "Balance"
+    ]
+  },
+  "Calf raises": {
+    "test_mae": 4.469989776611328,
+    "val_mse": 0.24198400974273682,
+    "n_train": 52,
+    "n_val": 12,
+    "n_test": 22,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "ROM",
+      "Knee status",
+      "Balance",
+      "Tempo",
+      "Peak hold"
+    ]
+  },
+  "Deadlift": {
+    "test_mae": 5.1638593673706055,
+    "val_mse": 0.35637491941452026,
+    "n_train": 42,
+    "n_val": 10,
+    "n_test": 25,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Spine",
+      "symmetry",
+      "bar path",
+      "lockout",
+      "tempo"
+    ]
+  },
+  "Dumbbell shoulder press": {
+    "test_mae": 3.7790322303771973,
+    "val_mse": 0.10862497985363007,
+    "n_train": 88,
+    "n_val": 10,
+    "n_test": 31,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Starting Position",
+      "Top Position",
+      "Elbow Path",
+      "Tempo",
+      "Core stability"
+    ]
+  },
+  "EZ Bar Curls": {
+    "test_mae": 3.9071428775787354,
+    "val_mse": 0.30137500166893005,
+    "n_train": 60,
+    "n_val": 14,
+    "n_test": 35,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Tempo",
+      "Elbow position",
+      "Neck position",
+      "Full ROM",
+      "No momentum"
+    ]
+  },
+  "Hummer curls": {
+    "test_mae": 5.011428356170654,
+    "val_mse": 0.3973750174045563,
+    "n_train": 83,
+    "n_val": 10,
+    "n_test": 35,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Elbow position",
+      "Wrist orientation",
+      "Movement control",
+      "Range of motion",
+      "Tempo"
+    ]
+  },
+  "Inclined Dumbbell Bench Press": {
+    "test_mae": 3.561339855194092,
+    "val_mse": 0.2005000114440918,
+    "n_train": 64,
+    "n_val": 11,
+    "n_test": 44,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Dumbbell path",
+      "Elbow angle",
+      "back position",
+      "wrist stability",
+      "tempo"
+    ]
+  },
+  "Lateral Raises": {
+    "test_mae": 4.503125190734863,
+    "val_mse": 0.16850002110004425,
+    "n_train": 76,
+    "n_val": 14,
+    "n_test": 32,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "shoulder + elbow angle",
+      "Raise height",
+      "Neck position",
+      "Tempo",
+      "No momentum"
+    ]
+  },
+  "Overhead Triceps Extension": {
+    "test_mae": 5.932258129119873,
+    "val_mse": 0.30675002932548523,
+    "n_train": 66,
+    "n_val": 12,
+    "n_test": 31,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Elbow position",
+      "ROM",
+      "Wrist position",
+      "Core tightness",
+      "Tempo"
+    ]
+  },
+  "Rows": {
+    "test_mae": 5.3309173583984375,
+    "val_mse": 0.19022917747497559,
+    "n_train": 63,
+    "n_val": 13,
+    "n_test": 21,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Back angle",
+      "Elbow path",
+      "ROM",
+      "Pulling motion",
+      "Stable base"
+    ]
+  },
+  "Seated biceps curls": {
+    "test_mae": 5.874982833862305,
+    "val_mse": 0.4768570363521576,
+    "n_train": 53,
+    "n_val": 10,
+    "n_test": 20,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Elbow position",
+      "Shoulder stability",
+      "ROM",
+      "Wrist position",
+      "Back support"
+    ]
+  },
+  "Shrugs": {
+    "test_mae": 4.269230842590332,
+    "val_mse": 0.1627500057220459,
+    "n_train": 61,
+    "n_val": 10,
+    "n_test": 26,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Shoulder path",
+      "ROM",
+      "Neck stability",
+      "Weight control",
+      "Back posture"
+    ]
+  },
+  "Standing Dumbbell Front Raises": {
+    "test_mae": 3.351785659790039,
+    "val_mse": 0.16512499749660492,
+    "n_train": 77,
+    "n_val": 10,
+    "n_test": 28,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Arm path",
+      "Raise height",
+      "Core stability",
+      "Wrist alignment",
+      "Controlled tempo"
+    ]
+  },
+  "Triceps Kickbacks": {
+    "test_mae": 5.46875,
+    "val_mse": 0.2446250021457672,
+    "n_train": 50,
+    "n_val": 10,
+    "n_test": 16,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "peak hold",
+      "Shoulder position",
+      "Full extension",
+      "No torso swing+Neutral spine",
+      "TEMPO"
+    ]
+  },
+  "Weighted Sqauts": {
+    "test_mae": 4.873809337615967,
+    "val_mse": 0.19175001978874207,
+    "n_train": 57,
+    "n_val": 10,
+    "n_test": 21,
+    "n_aspects": 5,
+    "aspect_cols": [
+      "Stance",
+      "Tempo",
+      "ROM",
+      "Back posture",
+      "Knee+heels tracking"
+    ]
+  }
+}

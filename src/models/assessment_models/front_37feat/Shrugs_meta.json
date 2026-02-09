@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Shoulder path",
+    "ROM",
+    "Neck stability",
+    "Weight control",
+    "Back posture"
+  ],
+  "feature_dim": 37,
+  "exercise": "Shrugs",
+  "view": "front",
+  "test_mae_0_10": 4.461538314819336,
+  "val_mse_0_1": 0.21275000274181366,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

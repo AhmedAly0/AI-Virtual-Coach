@@ -6,14 +6,14 @@ superseded by pose-based models. They are preserved here for reference only.
 
 ⚠️  Do NOT import from this package for new work. Use the active
     pose-based experiments in src.scripts instead:
-    - experiment_1 (Pose MLP)
+    - exercise_recognition (Pose MLP)
 """
 
 import warnings
 
 warnings.warn(
     "The src.scripts.archive package contains deprecated GEI-based experiments. "
-    "Use pose-based experiment_1 (Pose MLP) instead.",
+    "Use pose-based exercise_recognition (Pose MLP) instead.",
     DeprecationWarning,
     stacklevel=2,
 )

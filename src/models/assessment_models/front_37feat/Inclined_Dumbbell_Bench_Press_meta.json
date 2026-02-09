@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Dumbbell path",
+    "Elbow angle",
+    "back position",
+    "wrist stability",
+    "tempo"
+  ],
+  "feature_dim": 37,
+  "exercise": "Inclined Dumbbell Bench Press",
+  "view": "front",
+  "test_mae_0_10": 4.761306285858154,
+  "val_mse_0_1": 0.38050001859664917,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

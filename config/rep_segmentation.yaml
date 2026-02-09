@@ -1,0 +1,303 @@
+# ============================================================================
+# Rep Segmentation Configuration
+# ============================================================================
+#
+# All thresholds are tuned for DEGREE-based angles on NORMALIZED landmarks
+# (pelvis-centered, torso-length-scaled) using the 19 base features from
+# preprocess_pose_RGB.py.
+#
+# Convention:
+#   - Angles are in DEGREES (0–180)
+#   - Distances are in normalized units (fraction of torso length)
+#   - Threshold percentiles (thresh_pct, p_low, p_high) are signal-relative
+#     and therefore unit-agnostic
+#
+# Migration Note (v2.0):
+#   The legacy 9-feature pipeline used RADIANS on RAW (unnormalized) landmarks.
+#   Threshold percentiles did not need updating (they are relative), but the
+#   underlying rep signals now operate on normalized landmarks in degrees.
+#   All "win" and "min_dist" values are in frames and remain unchanged.
+# ============================================================================
+
+# Feature mode: "37" (default) or "9" (legacy)
+feature_mode: "37"
+
+# Default parameters used when no exercise-specific entry matches
+defaults:
+  method: peaks
+  win: 25
+  min_dist: 20
+  thresh_pct: 75
+  mode: max
+  pad_edges: false
+  max_reps: 40
+  q_drop_pct: 0
+
+# Per-exercise, per-view segmentation parameters
+exercises:
+
+  # =========================================================================
+  # UPPER BODY — ARM RAISES / PRESS
+  # =========================================================================
+  lateral_raises:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 75
+      mode: max
+
+  standing_dumbbell_front_raises:
+    # Alternating front raises: one arm at a time.
+    # Detect peaks per-arm and merge (more reliable than averaging both arms).
+    front:
+      method: alt_arms
+      win: 25
+      min_dist: 18
+      thresh_pct: 70
+      mode: max
+      smooth_k: 7
+      enforce_alt: true
+    side:
+      method: alt_arms
+      win: 25
+      min_dist: 18
+      thresh_pct: 70
+      mode: max
+      smooth_k: 7
+      enforce_alt: false
+
+  dumbbell_shoulder_press:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 25
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 25
+      thresh_pct: 75
+      mode: max
+
+  # =========================================================================
+  # UPPER BODY — CURLS / EXTENSIONS / BENCH / ROWS
+  # =========================================================================
+  hummer_curls:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+
+  ez_bar_curls:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+
+  seated_biceps_curls:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 20
+      thresh_pct: 70
+      mode: max
+
+  overhead_triceps_extension:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+
+  triceps_kickbacks:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+
+  inclined_dumbbell_bench_press:
+    front:
+      method: peaks
+      win: 30
+      min_dist: 25
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 30
+      min_dist: 25
+      thresh_pct: 70
+      mode: max
+
+  rows:
+    front:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+    side:
+      method: peaks
+      win: 25
+      min_dist: 22
+      thresh_pct: 70
+      mode: max
+
+  shrugs:
+    front:
+      method: peaks
+      win: 20
+      min_dist: 18
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 20
+      min_dist: 18
+      thresh_pct: 75
+      mode: max
+
+  # =========================================================================
+  # LOWER BODY
+  # =========================================================================
+  # Squats: most common failure case for peak-based counting.
+  # Use threshold UP→DOWN→UP on hip depth signal.
+  weighted_squats:
+    front:
+      method: threshold
+      win: 38
+      smooth_k: 11
+      debounce: 3
+      up_is_high: true
+      p_low: 20
+      p_high: 80
+      extreme_mode: min
+      pad_edges: true
+      max_reps: 40
+      q_drop_pct: 15
+    side:
+      method: threshold
+      win: 38
+      smooth_k: 11
+      debounce: 4
+      up_is_high: true
+      p_low: 20
+      p_high: 80
+      extreme_mode: min
+      pad_edges: true
+      max_reps: 40
+      q_drop_pct: 15
+
+  # Typo variant in dataset (kept for backward compatibility)
+  weighted_sqauts:
+    front:
+      method: threshold
+      win: 38
+      smooth_k: 11
+      debounce: 3
+      up_is_high: true
+      p_low: 20
+      p_high: 80
+      extreme_mode: min
+      pad_edges: true
+      max_reps: 40
+      q_drop_pct: 15
+    side:
+      method: threshold
+      win: 38
+      smooth_k: 11
+      debounce: 4
+      up_is_high: true
+      p_low: 20
+      p_high: 80
+      extreme_mode: min
+      pad_edges: true
+      max_reps: 40
+      q_drop_pct: 15
+
+  bulgarian_split_squat:
+    front:
+      method: peaks
+      win: 30
+      min_dist: 28
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 30
+      min_dist: 28
+      thresh_pct: 75
+      mode: max
+
+  deadlift:
+    front:
+      method: peaks
+      win: 35
+      min_dist: 35
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 35
+      min_dist: 35
+      thresh_pct: 75
+      mode: max
+
+  calf_raises:
+    front:
+      method: peaks
+      win: 20
+      min_dist: 18
+      thresh_pct: 75
+      mode: max
+    side:
+      method: peaks
+      win: 20
+      min_dist: 18
+      thresh_pct: 75
+      mode: max

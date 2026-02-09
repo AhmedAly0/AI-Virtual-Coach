@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Tempo",
+    "Elbow position",
+    "Neck position",
+    "Full ROM",
+    "No momentum"
+  ],
+  "feature_dim": 37,
+  "exercise": "EZ Bar Curls",
+  "view": "front",
+  "test_mae_0_10": 4.507124900817871,
+  "val_mse_0_1": 0.4713749289512634,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Elbow position",
+    "ROM",
+    "Wrist position",
+    "Core tightness",
+    "Tempo"
+  ],
+  "feature_dim": 37,
+  "exercise": "Overhead Triceps Extension",
+  "view": "front",
+  "test_mae_0_10": 2.4709677696228027,
+  "val_mse_0_1": 0.05674999952316284,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

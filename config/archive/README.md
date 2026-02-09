@@ -23,7 +23,7 @@
 
 Use the active pose-based configs instead:
 
-- `config/experiment_1_baseline_front.yaml` — Pose MLP baseline (front view)
-- `config/experiment_1_baseline_side.yaml` — Pose MLP baseline (side view)
-- `config/experiment_1_specialized_front.yaml` — Pose MLP specialized features (front view)
-- `config/experiment_1_specialized_side.yaml` — Pose MLP specialized features (side view)
+- `config/exer_recog_baseline_front.yaml` — Pose MLP baseline (front view)
+- `config/exer_recog_baseline_side.yaml` — Pose MLP baseline (side view)
+- `config/exer_recog_specialized_front.yaml` — Pose MLP specialized features (front view)
+- `config/exer_recog_specialized_side.yaml` — Pose MLP specialized features (side view)

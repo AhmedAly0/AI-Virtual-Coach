@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Elbow position",
+    "Wrist orientation",
+    "Movement control",
+    "Range of motion",
+    "Tempo"
+  ],
+  "feature_dim": 37,
+  "exercise": "Hummer curls",
+  "view": "side",
+  "test_mae_0_10": 5.011428356170654,
+  "val_mse_0_1": 0.3973750174045563,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

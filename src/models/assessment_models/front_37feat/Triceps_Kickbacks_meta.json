@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "peak hold",
+    "Shoulder position",
+    "Full extension",
+    "No torso swing+Neutral spine",
+    "TEMPO"
+  ],
+  "feature_dim": 37,
+  "exercise": "Triceps Kickbacks",
+  "view": "front",
+  "test_mae_0_10": 3.422727346420288,
+  "val_mse_0_1": 0.2446250021457672,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

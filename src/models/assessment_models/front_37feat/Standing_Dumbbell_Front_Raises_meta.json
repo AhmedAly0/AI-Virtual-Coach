@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Arm path",
+    "Raise height",
+    "Core stability",
+    "Wrist alignment",
+    "Controlled tempo"
+  ],
+  "feature_dim": 37,
+  "exercise": "Standing Dumbbell Front Raises",
+  "view": "front",
+  "test_mae_0_10": 2.4517858028411865,
+  "val_mse_0_1": 0.005125002004206181,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

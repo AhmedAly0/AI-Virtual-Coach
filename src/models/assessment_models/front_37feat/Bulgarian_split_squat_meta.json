@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Rear foot",
+    "Front knee tracking",
+    "Torso angle",
+    "Depth",
+    "Balance"
+  ],
+  "feature_dim": 37,
+  "exercise": "Bulgarian split squat",
+  "view": "front",
+  "test_mae_0_10": 4.461904525756836,
+  "val_mse_0_1": 0.28337499499320984,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

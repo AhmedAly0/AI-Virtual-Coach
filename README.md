@@ -107,11 +107,11 @@ RGB Video (Front/Side View)
 
 Extracts 3D pose landmarks from each video frame using MediaPipe's Pose Landmarker model (full, ~6MB). The 33 landmarks are normalized for scale and translation invariance (pelvis-centered, torso-length scaled) and converted into biomechanical features: 13 joint angles (elbow, shoulder, hip, knee, ankle, wrist, torso lean), 6 distance features (ear-shoulder, wrist-shoulder, elbow-hip), and 18 view-specific specialized features targeting exercise-specific confusion patterns. The temporal sequence is resampled to T=50 frames via linear interpolation, yielding a (50, 37) feature tensor per repetition.
 
-**Stage 2 — Exercise Recognition** ([src/scripts/experiment_1.py](src/scripts/experiment_1.py), [src/models/model_builder.py](src/models/model_builder.py))
+**Stage 2 — Exercise Recognition** ([src/scripts/exercise_recognition.py](src/scripts/exercise_recognition.py), [src/models/model_builder.py](src/models/model_builder.py))
 
 Flattens temporal features into a 1850-dimensional vector (50 × 37) and passes through a 3-layer feedforward network [512→256→128] with ReLU + Dropout to classify the exercise into one of 15 classes. The model is trained subject-disjoint (train/val/test sets contain completely different volunteers) with 30 randomized runs for statistical robustness. Achieves 90.36% macro F1 (side) and 86.94% macro F1 (front).
 
-**Stage 3 — Per-Repetition Assessment** ([src/scripts/video_to_assessment_cnn_all.py](src/scripts/video_to_assessment_cnn_all.py), [src/models/assessment_models/](src/models/assessment_models/))
+**Stage 3 — Per-Repetition Assessment** ([src/scripts/quality_assessment.py](src/scripts/quality_assessment.py), [src/models/assessment_models_37feat/](src/models/assessment_models_37feat/))
 
 Segments individual repetitions from the pose stream using exercise/view-specific biomechanical signals (e.g., arm elevation for raises, elbow flexion for curls, hip/knee depth for squats), then passes each repetition through a compact temporal CNN regressor. Generates 5 aspect-level quality scores (0–10 scale) per repetition, enabling downstream analysis of fatigue, consistency, and improvement over the set. Returns variable N_reps per video.
 
@@ -185,10 +185,10 @@ A LangGraph state machine with 5 sequential nodes: (1) load exercise-specific as
 ```
 ai-virtual-coach/
 ├── config/                                    # Experiment YAML configs
-│   ├── experiment_1_baseline_front.yaml
-│   ├── experiment_1_baseline_side.yaml
-│   ├── experiment_1_specialized_front.yaml
-│   ├── experiment_1_specialized_side.yaml
+│   ├── exer_recog_baseline_front.yaml
+│   ├── exer_recog_baseline_side.yaml
+│   ├── exer_recog_specialized_front.yaml
+│   ├── exer_recog_specialized_side.yaml
 │   └── archive/                               # Legacy GEI configs
 │
 ├── datasets/
@@ -230,9 +230,8 @@ ai-virtual-coach/
 │   │       └── ... (15 exercises × 2 files each)
 │   │
 │   ├── scripts/                               # Training & inference scripts
-│   │   ├── experiment_1.py                    # ★ Pose MLP training
-│   │   ├── vc_core.py                         # Video → assessment utilities
-│   │   ├── video_to_assessment_cnn_all.py     # End-to-end video assessment
+│   │   ├── exercise_recognition.py                    # ★ Pose MLP training
+│   │   ├── quality_assessment.py              # ★ End-to-end quality assessment (37-feat)
 │   │   ├── gei_embeddings.py                  # GEI embeddings (legacy)
 │   │   ├── gei_grid_search_utils.py           # GEI grid-search (legacy)
 │   │   └── archive/                           # Deprecated GEI scripts
@@ -262,8 +261,8 @@ ai-virtual-coach/
 │
 ├── output/
 │   ├── exer_recog/
-│   │   ├── exp_01_pose_mlp_baseline/          # 19-feature results
-│   │   ├── exp_01_pose_mlp_specialized/       # 37-feature results
+│   │   ├── exer_recog_baseline/          # 19-feature results
+│   │   ├── exer_recog_specialized/       # 37-feature results
 │   │   ├── exp_01_baseline/ … exp_05_small_cnn/ # Legacy GEI results
 │   └── assessment/
 │       ├── outputs_front/                     # Assessment results (front)
@@ -271,7 +270,7 @@ ai-virtual-coach/
 │
 ├── tests/
 │   ├── __init__.py
-│   ├── test_experiment_1.py                   # MLP validation tests
+│   ├── test_exercise_recognition.py                   # MLP validation tests
 │   └── test_05_small_cnn.py                   # Legacy GEI test
 │
 ├── docs/
@@ -387,7 +386,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 ```bash
 # Run a quick validation test
-pytest tests/test_experiment_1.py -v
+pytest tests/test_exercise_recognition.py -v
 
 # Or test the coaching agent
 python -c "from src.agents import CoachingAgent; print('✓ Coaching agent imported successfully')"
@@ -403,20 +402,20 @@ Train the exercise recognition model (MLP) from pose data.
 
 ```bash
 # Single run (baseline, front view)
-python src/scripts/experiment_1.py \
+python src/scripts/exercise_recognition.py \
   --npz_path datasets/Mediapipe\ pose\ estimates/pose_data_front_19_features.npz \
-  --config_path config/experiment_1_baseline_front.yaml
+  --config_path config/exer_recog_baseline_front.yaml
 
 # Multi-run (30 seeds, specialized features, side view)
-python src/scripts/experiment_1.py \
+python src/scripts/exercise_recognition.py \
   --npz_path datasets/Mediapipe\ pose\ estimates/pose_data_side_19_features.npz \
-  --config_path config/experiment_1_specialized_side.yaml \
+  --config_path config/exer_recog_specialized_side.yaml \
   --multi_run True
 ```
 
-**Output**: Results saved to `output/exer_recog/exp_01_pose_mlp_baseline/` or `_specialized/`
+**Output**: Results saved to `output/exer_recog/exer_recog_baseline/` or `_specialized/`
 
-**Config file example** (`config/experiment_1_specialized_front.yaml`):
+**Config file example** (`config/exer_recog_specialized_front.yaml`):
 ```yaml
 data:
   npz_path: datasets/Mediapipe pose estimates/pose_data_front_19_features.npz
@@ -440,23 +439,23 @@ multi_run:
   base_seed: 42
 
 results:
-  base_dir: output/exer_recog/exp_01_pose_mlp_specialized/front
+  base_dir: output/exer_recog/exer_recog_specialized/front
 ```
 
 ### Usage Pattern B: End-to-End Video → Assessment
 
-Process a single exercise video through the full pipeline (recognition + assessment + coaching).
+Process a single exercise video through the full 37-feature pipeline (recognition + assessment + coaching).
 
 ```python
-from src.scripts.video_to_assessment_cnn_all import process_exercise_video
+from src.scripts.quality_assessment import process_exercise_video_37
 from src.agents import CoachingAgent
 
-# Step 1: Process video
-results = process_exercise_video(
+# Step 1: Process video (37-feature pipeline)
+results = process_exercise_video_37(
     video_path="path/to/exercise_video.mp4",
     view="front",
     exercise_id=1,  # Dumbbell Shoulder Press
-    model_path="src/models/assessment_models/"
+    models_dir="src/models/assessment_models_37feat/"
 )
 
 # Step 2: Generate coaching feedback
@@ -769,33 +768,33 @@ model = Sequential([
 ### Configuration
 
 Config files in `config/`:
-- `experiment_1_baseline_front.yaml` — 19 features, front view
-- `experiment_1_baseline_side.yaml` — 19 features, side view
-- `experiment_1_specialized_front.yaml` — 37 features, front view
-- `experiment_1_specialized_side.yaml` — 37 features, side view
+- `exer_recog_baseline_front.yaml` — 19 features, front view
+- `exer_recog_baseline_side.yaml` — 19 features, side view
+- `exer_recog_specialized_front.yaml` — 37 features, front view
+- `exer_recog_specialized_side.yaml` — 37 features, side view
 
 ### Usage
 
 ```python
-from src.scripts.experiment_1 import train_experiment_1, train_experiment_1_multi_run
+from src.scripts.exercise_recognition import train_exercise_recognition, train_exercise_recognition_multi_run
 
 # Single run
-results = train_experiment_1(
+results = train_exercise_recognition(
     npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
-    config_path='config/experiment_1_specialized_front.yaml'
+    config_path='config/exer_recog_specialized_front.yaml'
 )
 
 # Multi-run (30 seeds)
-all_runs, stats = train_experiment_1_multi_run(
+all_runs, stats = train_exercise_recognition_multi_run(
     npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
-    config_path='config/experiment_1_specialized_front.yaml'
+    config_path='config/exer_recog_specialized_front.yaml'
 )
 print(f"Mean F1: {stats['macro_f1_mean']:.2%} ± {stats['macro_f1_std']:.2%}")
 ```
 
 ### Source Files
 
-- Training script: [src/scripts/experiment_1.py](src/scripts/experiment_1.py)
+- Training script: [src/scripts/exercise_recognition.py](src/scripts/exercise_recognition.py)
 - Model builder: [src/models/model_builder.py](src/models/model_builder.py)
 - Notebook: [notebooks/exer_recog/01_pose_mlp.ipynb](notebooks/exer_recog/01_pose_mlp.ipynb)
 
@@ -927,11 +926,13 @@ Folder names vary; canonicalize to `volunteer_NNN`:
 
 The assessment module converts recognized exercise videos into **per-rep quality scores** across 5 biomechanical aspects. Unlike simple "overall score" systems, it provides granular feedback enabling fatigue detection and aspect-specific coaching.
 
+> **v2 (37-feature pipeline)**: The module now uses the same **37-feature pelvis-centered, torso-scaled** representation as the recognition pipeline (19 base + 18 view-specialized). The legacy 9-feature path is deprecated but still available via `feature_mode="9"`.
+
 ### Repetition Segmentation
 
 Each video is segmented into individual reps using an exercise/view-specific **1D biomechanical signal**:
 - **Press/Raise**: Arm elevation (Y-position of wrist)
-- **Curl**: Elbow flexion angle
+- **Curl**: Elbow flexion angle (degrees)
 - **Squat**: Knee depth (hip-knee angle)
 - **Deadlift**: Hip hinge depth
 
@@ -940,17 +941,19 @@ Signal is smoothed and rep boundaries detected via **threshold-based cycle logic
 - Hysteresis to prevent noise-induced flipping
 - Minimum duration and separation constraints
 
+Rep segmentation parameters are externalized to [`config/rep_segmentation.yaml`](config/rep_segmentation.yaml) for easier tuning.
+
 **Output**: Variable N_reps per video (typically 8–12)
 
 ### Temporal CNN Architecture
 
 ```
-Input: (50, 9) temporal joint angle sequence per rep
+Input: (50, 37) temporal pose feature sequence per rep
   ↓
-Conv1d(9→64, kernel=3, stride=1, padding='same')
+Conv1d(37→64, kernel=5, stride=1, padding='same')
 ReLU + Dropout(0.3)
   ↓
-Conv1d(64→128, kernel=3, stride=1, padding='same')
+Conv1d(64→128, kernel=5, stride=1, padding='same')
 ReLU + Dropout(0.3)
   ↓
 AdaptiveAvgPool1d(output_size=1)
@@ -962,21 +965,42 @@ Attention pooling across N_reps
 Dense(5) → 5 aspect scores (0–10 scale per rep)
 ```
 
-### 30 Pre-trained Models
+<details>
+<summary>37-Feature Composition</summary>
 
-15 exercises × 2 views = 30 `.joblib` model files:
+| Group | Count | Features |
+|-------|-------|----------|
+| Joint angles (degrees) | 13 | Shoulder, elbow, hip, knee, wrist, ankle, etc. |
+| Normalized distances | 6 | Wrist–hip, elbow–shoulder, knee–ankle, etc. |
+| Specialized (front) | 18 | Bilateral symmetry, lateral deviations, cross-body |
+| Specialized (side) | 18 | Sagittal plane ROM, anterior lean, depth ratios |
+| **Total** | **37** | 19 base + 18 view-specific |
+
+All landmarks are **pelvis-centered** and **torso-length-scaled** before feature computation.
+
+</details>
+
+### Pre-trained Models
+
+**Legacy (9-feature, deprecated)** — 15 exercises × 2 views = 30 `.joblib` files:
 
 ```
 src/models/assessment_models/
 ├── 1__Dumbbell_shoulder_press_best_model.joblib
 ├── 1__Dumbbell_shoulder_press_scaler.joblib
-├── 2__Hummer_curls_best_model.joblib
-├── 2__Hummer_curls_scaler.joblib
-├── ...
-└── 15__Calf_raises_scaler.joblib
+└── ...
 ```
 
-Each model is trained separately per exercise/view under subject-disjoint splits. Scalers normalize features before inference.
+**37-feature (current)** — `.pt` PyTorch checkpoints generated by `quality_assessment.py --train`:
+
+```
+src/models/assessment_models_37feat/
+├── 1__Dumbbell_shoulder_press__front.pt
+├── 1__Dumbbell_shoulder_press__side.pt
+└── ...
+```
+
+Each `.pt` checkpoint stores `{model_state_dict, feature_dim: 37, n_aspects, exercise, view}`. Models are trained per-exercise/view under subject-disjoint splits.
 
 ### Assessment Accuracy
 
@@ -1033,30 +1057,54 @@ This enables learning from set-level labels while providing rep-level insights.
 - **Targets**: Reliability-weighted coach annotations: $y = 0.25 \cdot y_{C1} + 0.75 \cdot y_{C2}$
 - **Inference**: Rescale predictions to [0, 10] scale
 
-### Usage
+### Usage (37-Feature Pipeline)
+
+**Inference:**
 
 ```python
-from src.scripts.video_to_assessment_cnn_all import process_exercise_video
+from src.scripts.quality_assessment import process_exercise_video_37
 
-results = process_exercise_video(
+results = process_exercise_video_37(
     video_path="exercise.mp4",
     view="front",
     exercise_id=1,
-    model_path="src/models/assessment_models/"
+    models_dir="src/models/assessment_models_37feat/"
 )
 
 print(f"Exercise: {results['exercise_name']}")
 print(f"Reps detected: {results['n_reps']}")
-print(f"Per-rep scores:")
 for rep in results['per_rep_scores']:
     print(f"  Rep {rep['rep_number']}: {rep['scores']}")
 ```
 
+**Training (from pre-extracted NPZ):**
+
+```bash
+python -m src.scripts.quality_assessment --train \
+    --npz_path datasets/Mediapipe\ pose\ estimates/pose_data_front_19_features.npz \
+    --view front \
+    --annotation_dir datasets/ \
+    --output_dir src/models/assessment_models_37feat/
+```
+
+### Migration: 9-Feature → 37-Feature
+
+| Aspect | Legacy (9-feature) | Current (37-feature) |
+|--------|-------------------|---------------------|
+| Entry point | `video_to_assessment_cnn_all.py` (removed) | `quality_assessment.py` |
+| Feature extraction | `extract_9_features()` | `compute_assessment_features()` |
+| Normalization | None | Pelvis-centered, torso-scaled |
+| Angle convention | Radians | Degrees |
+| Model format | `.joblib` (sklearn) | `.keras` (TensorFlow) |
+| MediaPipe API | `mp.solutions.pose` | Tasks API (`PoseLandmarker`) |
+| Rep seg config | Hardcoded (removed) | [`config/rep_segmentation.yaml`](config/rep_segmentation.yaml) |
+
 ### Source Files
 
-- End-to-end script: [src/scripts/video_to_assessment_cnn_all.py](src/scripts/video_to_assessment_cnn_all.py)
-- Rep segmentation: [src/scripts/vc_core.py](src/scripts/vc_core.py)
-- Pre-trained models: [src/models/assessment_models/](src/models/assessment_models/)
+- Assessment module (all-in-one): [src/scripts/quality_assessment.py](src/scripts/quality_assessment.py)
+- Rep seg config: [config/rep_segmentation.yaml](config/rep_segmentation.yaml)
+- Pre-trained models (37-feat): [src/models/assessment_models_37feat/](src/models/assessment_models_37feat/)
+- Legacy models (9-feat): [src/models/assessment_models/](src/models/assessment_models/)
 
 </details>
 
@@ -1396,7 +1444,7 @@ multi_run:
   base_seed: 42
 
 results:
-  base_dir: output/exer_recog/exp_01_pose_mlp_{baseline,specialized}/{front,side}
+  base_dir: output/exer_recog/exer_recog_{baseline,specialized}/{front,side}
 ```
 
 ### Environment Variables
@@ -1519,29 +1567,29 @@ Full `requirements.txt` available at repository root.
 pytest tests/ -v
 
 # Single test file
-pytest tests/test_experiment_1.py -v
+pytest tests/test_exercise_recognition.py -v
 
 # With output
-pytest tests/test_experiment_1.py -v -s
+pytest tests/test_exercise_recognition.py -v -s
 ```
 
 ### Test Files
 
 | File | Purpose |
 |------|---------|
-| `test_experiment_1.py` | MLP training, single-run and multi-run validation |
+| `test_exercise_recognition.py` | MLP training, single-run and multi-run validation |
 | `test_05_small_cnn.py` | Legacy GEI model test (deprecated) |
 
 ### Example Test
 
 ```python
-def test_experiment_1_single_run():
+def test_exercise_recognition_single_run():
     """Verify single training run completes successfully."""
-    from src.scripts.experiment_1 import train_experiment_1
+    from src.scripts.exercise_recognition import train_exercise_recognition
     
-    results = train_experiment_1(
+    results = train_exercise_recognition(
         npz_path='datasets/Mediapipe pose estimates/pose_data_front_19_features.npz',
-        config_path='config/experiment_1_baseline_front.yaml',
+        config_path='config/exer_recog_baseline_front.yaml',
         seed=99,
         max_epochs=5  # Quick test
     )

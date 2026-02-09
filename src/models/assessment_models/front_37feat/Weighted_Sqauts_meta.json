@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Stance",
+    "Tempo",
+    "ROM",
+    "Back posture",
+    "Knee+heels tracking"
+  ],
+  "feature_dim": 37,
+  "exercise": "Weighted Sqauts",
+  "view": "front",
+  "test_mae_0_10": 5.602380752563477,
+  "val_mse_0_1": 0.3217500150203705,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

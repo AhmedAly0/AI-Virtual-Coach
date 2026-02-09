@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Back angle",
+    "Elbow path",
+    "ROM",
+    "Pulling motion",
+    "Stable base"
+  ],
+  "feature_dim": 37,
+  "exercise": "Rows",
+  "view": "front",
+  "test_mae_0_10": 3.870833396911621,
+  "val_mse_0_1": 0.2304999828338623,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

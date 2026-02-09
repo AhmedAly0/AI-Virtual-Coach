@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "shoulder + elbow angle",
+    "Raise height",
+    "Neck position",
+    "Tempo",
+    "No momentum"
+  ],
+  "feature_dim": 37,
+  "exercise": "Lateral Raises",
+  "view": "front",
+  "test_mae_0_10": 3.8531250953674316,
+  "val_mse_0_1": 0.07849999517202377,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

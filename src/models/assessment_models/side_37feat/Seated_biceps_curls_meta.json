@@ -1,0 +1,16 @@
+{
+  "aspect_cols": [
+    "Elbow position",
+    "Shoulder stability",
+    "ROM",
+    "Wrist position",
+    "Back support"
+  ],
+  "feature_dim": 37,
+  "exercise": "Seated biceps curls",
+  "view": "side",
+  "test_mae_0_10": 5.874982833862305,
+  "val_mse_0_1": 0.4768570363521576,
+  "T_fixed": 50,
+  "n_aspects": 5
+}

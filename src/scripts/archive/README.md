@@ -10,7 +10,7 @@ These experiments used **Gait Energy Images (GEIs)** as input for exercise recog
 
 | File | Original Name | Description |
 |------|---------------|-------------|
-| `experiment_1_gei_baseline.py` | experiment_1.py | 2-phase transfer learning on GEIs |
+| `experiment_1_gei_baseline.py` | exercise_recognition.py | 2-phase transfer learning on GEIs |
 | `experiment_2_gei_progressive.py` | experiment_2.py | Progressive unfreezing on GEIs |
 | `experiment_3_gei_smart_heads.py` | experiment_3.py | Architecture-specific classification heads on GEIs |
 | `experiment_4_gei_regularized.py` | experiment_4.py | Regularized dual-pooling heads on GEIs |
@@ -20,7 +20,7 @@ These experiments used **Gait Energy Images (GEIs)** as input for exercise recog
 
 Use the active pose-based experiments instead:
 
-- **`src/scripts/experiment_1.py`** — Pose MLP (temporal features, 30-run evaluation)
+- **`src/scripts/exercise_recognition.py`** — Pose MLP (temporal features, 30-run evaluation)
 
 ## When Were These Archived?
 
