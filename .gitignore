@@ -55,3 +55,8 @@ experiments/exer_recog/results/
 # *.h5
 # *.pkl
 # *.pth
+
+# Private papers and documents work
+Final_Thesis/
+Research_Paper_Draft/
+recommendations tex files/
